@@ -48,5 +48,7 @@ public strictfp class RobotPlayer {
             default:
                 throw new IllegalStateException("NOT A VALID BOT");
         }
+
+        bot.turn();
     }
 }

@@ -6,7 +6,7 @@ import sprintbot.battlecode2022.util.*;
 
 public class Watchtower extends RunnableBot {
 
-    public Watchtower(RobotController rc) {
+    public Watchtower(RobotController rc) throws GameActionException {
         super(rc);
     }
 

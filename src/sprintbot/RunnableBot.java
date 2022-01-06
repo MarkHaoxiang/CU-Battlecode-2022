@@ -8,8 +8,9 @@ public abstract class RunnableBot {
 
     public static RobotController controller;
 
-    public RunnableBot(RobotController rc) {
+    public RunnableBot(RobotController rc) throws GameActionException {
         controller = rc;
+        this.init();
     }
 
     public void init() throws GameActionException {

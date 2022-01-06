@@ -6,7 +6,7 @@ import sprintbot.battlecode2022.util.*;
 
 public class Builder extends RunnableBot {
 
-    public Builder(RobotController rc) {
+    public Builder(RobotController rc) throws GameActionException {
         super(rc);
     }
 

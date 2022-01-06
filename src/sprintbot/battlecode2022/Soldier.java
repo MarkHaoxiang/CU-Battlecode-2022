@@ -6,7 +6,7 @@ import sprintbot.battlecode2022.util.*;
 
 public class Soldier extends RunnableBot {
 
-    public Soldier(RobotController rc) {
+    public Soldier(RobotController rc) throws GameActionException {
         super(rc);
     }
 

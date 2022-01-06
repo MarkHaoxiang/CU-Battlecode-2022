@@ -6,7 +6,7 @@ import sprintbot.battlecode2022.util.*;
 
 public class Sage extends RunnableBot {
 
-    public Sage(RobotController rc) {
+    public Sage(RobotController rc) throws GameActionException {
         super(rc);
     }
 

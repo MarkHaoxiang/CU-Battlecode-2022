@@ -6,7 +6,7 @@ import sprintbot.battlecode2022.util.*;
 
 public class Archon extends RunnableBot {
 
-    public Archon(RobotController rc) {
+    public Archon(RobotController rc) throws GameActionException {
         super(rc);
     }
 
