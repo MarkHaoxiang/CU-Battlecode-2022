@@ -490,7 +490,8 @@ public class PathFindingOld
 		if (a == null) return false;
 		return a.x < MAP_WIDTH && a.y < MAP_HEIGHT;
 	}
-	
+
+
 	public static int[] relative(MapLocation from,
 	                             MapLocation to)
 	{

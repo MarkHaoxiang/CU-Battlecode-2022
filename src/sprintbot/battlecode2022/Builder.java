@@ -18,5 +18,7 @@ public class Builder extends RunnableBot {
     @Override
     public void turn() throws GameActionException {
 
+        Cache.update();
+
     }
 }

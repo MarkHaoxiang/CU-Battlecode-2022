@@ -19,5 +19,7 @@ public class Watchtower extends RunnableBot {
     @Override
     public void turn() throws GameActionException {
 
+        Cache.update();
+
     }
 }
