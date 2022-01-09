@@ -1,7 +1,6 @@
-package sprintbot;
+package testenemy;
 
 import battlecode.common.*;
-import sprintbot.battlecode2022.*;
 
 /**
  * RobotPlayer is the class that describes your main robot strategy.
@@ -10,7 +9,14 @@ import sprintbot.battlecode2022.*;
  */
 public strictfp class RobotPlayer
 {
-	public static RobotController controller;
+	
+	/**
+	 * We will use this variable to count the number of turns this robot has been alive.
+	 * You can use static variables like this to save any information you want. Keep in mind that even though
+	 * these variables are static, in Battlecode they aren't actually shared between your robots.
+	 */
+	static boolean firstTime = true;
+	static InterfacePlayer currentPlayer = null;
 	
 	/**
 	 * run() is the method that is called when a robot is instantiated in the Battlecode world.
@@ -20,37 +26,18 @@ public strictfp class RobotPlayer
 	 *           information on its current status. Essentially your portal to interacting with the world.
 	 **/
 	@SuppressWarnings("unused")
-	public static void run(RobotController rc) throws GameActionException
+	public static void run(RobotController rc)
+			throws GameActionException
 	{
-		RobotPlayer.controller = rc;
 		
-		RunnableBot bot;
-		switch (controller.getType())
-		{
-			case ARCHON:
-				bot = new Archon(controller);
-				break;
-			case BUILDER:
-				bot = new Builder(controller);
-				break;
-			case LABORATORY:
-				bot = new Laboratory(controller);
-				break;
-			case MINER:
-				bot = new Miner(controller);
-				break;
-			case SAGE:
-				bot = new Sage(controller);
-				break;
-			case SOLDIER:
-				bot = new Soldier(controller);
-				break;
-			case WATCHTOWER:
-				bot = new Watchtower(controller);
-				break;
-			default:
-				throw new IllegalStateException("NOT A VALID BOT");
-		}
+		// Hello world! Standard output is very useful for debugging.
+		// Everything you say here will be directly viewable in your terminal when you run a match!
+		//System.out.println("I'm a " + rc.getType() + " " +
+		//        "and I just got created! I have health
+		//        " + rc.getHealth());
+		
+		// You can also use indicators to save debug notes in replays.
+		//rc.setIndicatorString("Hello world!");
 		
 		while (true)
 		{
@@ -61,20 +48,53 @@ public strictfp class RobotPlayer
 			// Try/catch blocks stop unhandled exceptions, which cause your robot to explode.
 			try
 			{
-				bot.turn();
+				// The same run() function is called for every robot on your team, even if they are
+				// different types. Here, we separate the control depending on the RobotType, so we can
+				// use different strategies on different robots. If you wish, you are free to rewrite
+				// this into a different control structure!
+				if (firstTime)
+				{
+					switch (rc.getType())
+					{
+						case ARCHON:
+							currentPlayer =
+									new ArchonPlayer();
+							break;
+						case MINER:
+							currentPlayer =
+									new MinerPlayer();
+							break;
+						case SOLDIER:
+							currentPlayer =
+									new SoldierPlayer();
+							break;
+						case LABORATORY: // Examplefuncsplayer doesn't use any of these robot types below.
+						case WATCHTOWER: // You might want to give them a try!
+						case BUILDER:
+						case SAGE:
+							currentPlayer =
+									new SagePlayer();
+							break;
+					}
+					firstTime = false;
+					currentPlayer.create(rc);
+				}
+				currentPlayer.run(rc);
 			} catch (GameActionException e)
 			{
 				// Oh no! It looks like we did something illegal in the Battlecode world. You should
 				// handle GameActionExceptions judiciously, in case unexpected events occur in the game
 				// world. Remember, uncaught exceptions cause your robot to explode!
-				System.out.println(rc.getType() + " Exception");
+				System.out.println(rc.getType() +
+						" Exception");
 				e.printStackTrace();
 				
 			} catch (Exception e)
 			{
 				// Oh no! It looks like our code tried to do something bad. This isn't a
 				// GameActionException, so it's more likely to be a bug in our code.
-				System.out.println(rc.getType() + " Exception");
+				System.out.println(rc.getType() +
+						" Exception");
 				e.printStackTrace();
 				
 			} finally

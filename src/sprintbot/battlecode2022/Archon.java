@@ -39,7 +39,7 @@ public class Archon extends RunnableBot {
 
     class DefaultBuild implements BuildStrategy {
 
-        private int build_order = 0;
+        private int build_order = 1;
 
         @Override
         public boolean build() throws GameActionException {
