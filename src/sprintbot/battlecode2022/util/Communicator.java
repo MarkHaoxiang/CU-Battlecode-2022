@@ -9,39 +9,6 @@ import java.util.Map;
 
 public class Communicator
 {
-	/* Connection Schema
-	 * 0 - 15 : Header
-	 * 16 - 16 + Archon Number * : Arcon communication
-	 * Other : Unit communication
-	 * */
-	
-	/* Header Schema
-	 * Map orientation - 2 bits
-	 * Archon number - 2 bits
-	 * Current strategy? - 3 bits
-	 *
-	 * */
-	
-	/* Archon Schema
-	 *
-	 * Shared overall macro strategy (eg. attack certain location) 16 bits
-	 * Each archon will then have a 16 bit channel for themselves to give out orders
-	 *
-	 *   Archon order
-	 *   1 bit alternating between rounds - still alive?
-	 *   3 bits - spawned unit position (archon will check to ensure no two archons spawn at same location)
-	 *   8 bits - location
-	 *   4 bits - flag
-	 *
-	 * */
-	
-	/* Unit Schema
-	 *
-	 *  Round Number % 5 = 0: Mining
-	 *  Scouting
-	 *  Micro
-	 *
-	 * */
 	
 	protected static RobotController controller;
 	protected static int MAP_WIDTH;
@@ -74,8 +41,8 @@ public class Communicator
 		Communicator.controller = controller;
 		MAP_WIDTH = controller.getMapWidth();
 		MAP_HEIGHT = controller.getMapHeight();
-		X_STEP = (MAP_WIDTH + MAP_WIDTH % COMPRESSED_SIZE) / COMPRESSED_SIZE;
-		Y_STEP = (MAP_HEIGHT + MAP_HEIGHT % COMPRESSED_SIZE) / COMPRESSED_SIZE;
+		X_STEP = (int) Math.ceil((double)MAP_WIDTH / COMPRESSED_SIZE);
+		Y_STEP = (int) Math.ceil((double)MAP_HEIGHT / COMPRESSED_SIZE);
 		CENTRE_X = (X_STEP - 1) / 2;
 		CENTRE_Y = (Y_STEP - 1) / 2;
 	}
@@ -120,10 +87,6 @@ public class Communicator
 		return cache_array;
 	}
 	
-	
-	// TODO: Please use OOP when transmitting different message types. No static switch statements.
-	
-	
 	public static void update(Event event, MapLocation location) throws GameActionException
 	{
 		switch (Cache.controller.getRoundNum() % 5)
@@ -135,9 +98,6 @@ public class Communicator
 			case 4:
 		}
 	}
-	
-	// TODO: Compression ideas? Discuss.
-	
 	/**
 	 * Compresses a MapLocation to a number between 0~63 (x-major order).
 	 *
@@ -190,10 +150,5 @@ public class Communicator
 		}
 		return best_location;
 	}
-	
-	// TODO: Test out different ways of message storing, bitset? boolean array? directly read? Discuss.
-	
-	// TODO: Should we attempt distributed pathfinding? Discuss.
-	
-	// TODO: Please store decoded information in cache!
+
 }

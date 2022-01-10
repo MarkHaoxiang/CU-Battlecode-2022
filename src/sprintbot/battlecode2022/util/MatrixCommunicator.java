@@ -7,15 +7,16 @@ import battlecode.common.RobotController;
 public class MatrixCommunicator extends Communicator {
 	
 	/* Unit Schema
-	 * Starts from the 32nd bit, i.e. the 3rd integer in shared memory.
-	 * 15 bits boolean array per compressed location.
+	 * Starts 7th integer in shared memory.
+	 * 14 bits boolean array per compressed location.
 	 * 0 - 0: Opponent Archon
 	 * 1 - 1: Metal & no miner around
-	 * 2 - 2: Opponent Soilder / Sage
+	 * 2 - 2: Opponent Soldier / Sage
 	 * */
 	
-	private static final int offset = 2;
-	private static final int BITS_PER_LOCATION = 15; // Every location has 15 bits to store states
+	private static final int offset = 6 ;
+	private static final int BITS_PER_LOCATION = 14; // Every location has 14 bits to store states
+	// Can be expanded to store fewer states but more options
 	
 	
 	/**
@@ -39,6 +40,12 @@ public class MatrixCommunicator extends Communicator {
 		int event_bit_id = Communicator.eventNum(event);
 		int bit_id = event_bit_id + BITS_PER_LOCATION * compressed_location; // the bit to change
 		int id = offset + bit_id / BITS_PER_INTEGER; // integer id in shared memory
+		if (Constants.DEBUG && id >= 64) {
+			System.out.println("Who wrote a bug?");
+			System.out.println(compressed_location);
+			System.out.println(event_bit_id);
+			System.out.println(id);
+		}
 		int value = controller.readSharedArray(id);
 		int relative_bit_id = BITS_PER_INTEGER - bit_id % BITS_PER_INTEGER - 1; // count from LSB
 		value &= (1 << relative_bit_id);

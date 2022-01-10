@@ -18,9 +18,10 @@ public abstract class RunnableBot
 	{
 		this.controller = controller;
 		this.navigator = new BugNavigator(controller);
-		this.init();
 		Cache.init(controller);
 		Communicator.init(controller);
+		// Init for strategy, setup before!
+		this.init();
 	}
 	
 	// Methods

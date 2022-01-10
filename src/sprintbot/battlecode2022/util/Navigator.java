@@ -75,6 +75,30 @@ public abstract class Navigator {
         return new MapLocation(random.nextInt() % MAP_WIDTH, random.nextInt() % MAP_HEIGHT);
     }
 
+    /**
+     *
+     * @param location center
+     * @return list of map locations around location on the map
+     * @throws GameActionException
+     */
+    public MapLocation[] adjacentLocationWithCenter(MapLocation location) throws GameActionException {
+        int n = 0;
+        for (Direction dir : Direction.allDirections()) {
+            if (inMap(location.add(dir))) {
+                n ++;
+            }
+        }
+        MapLocation[] res = new MapLocation[n];
+        n = 0;
+        for (Direction dir : Direction.allDirections()) {
+            if (inMap(location.add(dir))) {
+                res[n] = location.add(dir);
+                n ++;
+            }
+        }
+        return res;
+    }
+
 }
 
 

@@ -10,6 +10,10 @@ import java.util.*;
 
 public class Miner extends RunnableBot
 {
+	// Archon assigned role (unused for now, do something fun like farming with it)
+	CommandCommunicator.RobotRole assigned_role = CommandCommunicator.RobotRole.DEFAULT;
+	MapLocation assigned_location = null;
+
 	// Move towards metal strategy (or it could be scouting strategy, or etc., but basically it's a strategy to move)
 	private MoveStrategy current_moving_strategy;
 	private final DefaultMoveStrategy default_moving_strategy = new DefaultMoveStrategy();
@@ -26,6 +30,9 @@ public class Miner extends RunnableBot
 	public void init() throws GameActionException
 	{
 		super.init();
+		CommandCommunicator.SpawnOrder order = CommandCommunicator.getSpawnRole();
+		assigned_role = order.role;
+		assigned_location = order.loc;
 	}
 	
 	// Strategy
@@ -61,19 +68,84 @@ public class Miner extends RunnableBot
 					@Override
 					public int compare(MapLocation a, MapLocation b)
 					{
-						return Navigator.travelDistance(Cache.controller.getLocation(), a).
-								compareTo(Navigator.travelDistance(Cache.controller.getLocation(), b));
+						Integer va = Navigator.travelDistance(Cache.controller.getLocation(), a);
+						Integer vb = Navigator.travelDistance(Cache.controller.getLocation(), b);
+						try {
+							for (MapLocation loc : navigator.adjacentLocationWithCenter(a)) {
+								if (Cache.controller.canSenseLocation(loc)) {
+									RobotInfo robot = Cache.controller.senseRobotAtLocation(loc);
+									if (robot != null
+											&& robot.getTeam().isPlayer()
+											&& robot.getType() == RobotType.MINER) {
+										va = Integer.MAX_VALUE;
+									}
+								}
+							}
+							for (MapLocation loc : navigator.adjacentLocationWithCenter(b)) {
+								if (Cache.controller.canSenseLocation(loc)) {
+									RobotInfo robot = Cache.controller.senseRobotAtLocation(loc);
+									if (robot != null
+										&& robot.getTeam().isPlayer()
+										&& robot.getType() == RobotType.MINER) {
+										vb = Integer.MAX_VALUE;
+									}
+								}
+							}
+						}
+						catch (GameActionException e) {
+						}
+
+						return va.compareTo(vb);
 					}
 				});
-				move_target = lead_spots[0];
-				Navigator.MoveResult move_result = navigator.move(move_target);
-				if (move_result == Navigator.MoveResult.IMPOSSIBLE ||
-						move_result == Navigator.MoveResult.REACHED)
-					return false;
-				// TODO: Fix bug here where location might not be uploaded
-				// Report lead location [COMMUNICATE]
-				MatrixCommunicator.update(Communicator.Event.METAL, move_target);
+				MapLocation lead_target = lead_spots[0];
+				boolean should_mine = true;
+				for (MapLocation loc : navigator.adjacentLocationWithCenter(lead_target)) {
+					if (Cache.controller.canSenseLocation(loc)) {
+						RobotInfo robot = Cache.controller.senseRobotAtLocation(loc);
+						if (robot != null
+								&& robot.getTeam().isPlayer()
+								&& robot.getType() == RobotType.MINER) {
+							should_mine = false;
+						}
+					}
+				}
+				if (should_mine) {
+					Navigator.MoveResult move_result = navigator.move(lead_target);
+					if (move_result == Navigator.MoveResult.IMPOSSIBLE ||
+							move_result == Navigator.MoveResult.REACHED)
+						return false;
+					// TODO: Fix bug here where location might not be uploaded
+					// Report lead location [COMMUNICATE]
+					MatrixCommunicator.update(Communicator.Event.METAL, lead_target);
+				}
+				else {
+					Navigator.MoveResult move_result = navigator.move(move_target);
+					// Only changes the target if moving fails
+					int tot_attempts = 0;
+					while (move_result == Navigator.MoveResult.IMPOSSIBLE ||
+							move_result == Navigator.MoveResult.REACHED)
+					{
+						// TODO: Fix bug here where location might not be fetched
+						// TODO: Only report locations not already in use and add back functionality
+						// Update reported location to get the desired target [COMMUNICATE]
+					/*
+					MatrixCommunicator.read(Communicator.Event.METAL);
+					move_target = Communicator.getClosestFromCompressedLocationArray(Cache.metal_compressed_locations,
+							Cache.controller.getLocation());
+					 */
+						// If nothing is available then choose a random location
+						if (move_target == null)
+							move_target = navigator.randomLocation();
+						move_result = navigator.move(move_target);
+						tot_attempts++;
+						if (tot_attempts >= GIVE_UP_THRESHOLD_TURN) // Give up on further attempts
+							return false;
+					}
+				}
+
 			}
+
 			else // If no leads nearby, either moves towards the closest reported location or chooses a random location
 			{
 				Navigator.MoveResult move_result = navigator.move(move_target);
@@ -83,10 +155,13 @@ public class Miner extends RunnableBot
 						move_result == Navigator.MoveResult.REACHED)
 				{
 					// TODO: Fix bug here where location might not be fetched
+					// TODO: Only report locations not already in use and add back functionality
 					// Update reported location to get the desired target [COMMUNICATE]
+					/*
 					MatrixCommunicator.read(Communicator.Event.METAL);
 					move_target = Communicator.getClosestFromCompressedLocationArray(Cache.metal_compressed_locations,
 							Cache.controller.getLocation());
+					 */
 					// If nothing is available then choose a random location
 					if (move_target == null)
 						move_target = navigator.randomLocation();
@@ -116,7 +191,7 @@ public class Miner extends RunnableBot
 					// You can mine multiple times per turn!
 					while (Cache.controller.canMineGold(mineLocation))
 						Cache.controller.mineGold(mineLocation);
-					while (Cache.controller.canMineLead(mineLocation))
+					while (Cache.controller.canMineLead(mineLocation) && Cache.controller.senseLead(mineLocation) > 2)
 						Cache.controller.mineLead(mineLocation);
 				}
 			return true;

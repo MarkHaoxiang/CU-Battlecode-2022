@@ -132,7 +132,7 @@ public class Soldier extends RunnableBot
 	public void turn() throws GameActionException
 	{
 		Cache.update();
-		
+
 		observeNearbyEnemies();
 		
 		current_attacking_strategy = default_attacking_strategy;

@@ -5,13 +5,13 @@ import battlecode.common.MapLocation;
 import battlecode.common.RobotController;
 
 
-public class QueueCommunicator extends Communicator{
+public class QueueCommunicator extends Communicator {
 	
 	/* Unit Schema
 	 * Queue-based communication.
-	 * Uses index=2~63 in shared memory.
+	 * Uses index=7~63 in shared memory.
 	 * Each message consists of 2 bits for event type and 6 bits for compressed location.
-	 * Can hold a maximum of 120 messages simultaneously.
+	 * Can hold a maximum of 108 messages simultaneously.
 	 * */
 	
 	// can add one more event
@@ -26,7 +26,7 @@ public class QueueCommunicator extends Communicator{
 	
 	// queue parameters
 	private static final int p = 100;
-	private static final int offset = 2;
+	private static final int offset = 6;
 	private static int tail = 0; // end of queue content (open end, tail not included)
 	private static int length = 0; // length of queue content
 	

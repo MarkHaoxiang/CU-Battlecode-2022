@@ -7,9 +7,14 @@ import sprintbot.battlecode2022.util.*;
 public class Archon extends RunnableBot {
 
 
-    //Build Strategy
-    private BuildStrategy current_strategy;
+    // Command
+    private CommandCommunicator.SpawnOrder last_order = null;
+
+    // Build Strategy
     private final DefaultBuild default_strategy = new DefaultBuild();
+
+    // Repair Strategy
+    private final DefaultRepair repair_strategy = new DefaultRepair();
 
 
     public Archon(RobotController rc) throws GameActionException {
@@ -19,19 +24,37 @@ public class Archon extends RunnableBot {
     @Override
     public void init() throws GameActionException {
         super.init();
+        CommandCommunicator.archonIDShare();
     }
 
     @Override
     public void turn() throws GameActionException {
 
+        CommandCommunicator.deadManSwitch();
+
+        // Last turn's spawn
+        if (last_order != null) {
+            CommandCommunicator.spawnMessage(last_order);
+            last_order = null;
+        }
+
+        RobotController controller = getRobotController();
+
         // Default build
-        current_strategy = default_strategy;
+        BuildStrategy current_build_strategy = default_strategy;
+        RepairStrategy current_repair_strategy = repair_strategy;
 
-        current_strategy.build();
-
+        if (controller.isActionReady()) {
+            if (current_build_strategy.build());
+            else current_repair_strategy.repair();
+        }
     }
 
     // Strategy
+
+    interface RepairStrategy {
+        boolean repair() throws GameActionException;
+    }
 
     interface BuildStrategy {
         boolean build() throws GameActionException;
@@ -65,11 +88,34 @@ public class Archon extends RunnableBot {
         }
     }
 
+    class DefaultRepair implements RepairStrategy {
+        @Override
+        public boolean repair() throws GameActionException {
+            RobotController controller = getRobotController();
+            RobotInfo[] potential = controller.senseNearbyRobots();
+            for (RobotInfo robot : potential) {
+                if (robot.getTeam() == Cache.OUR_TEAM && robot.getHealth() < robot.getType().health) {
+                    if (controller.canRepair(robot.getLocation())) {
+                        controller.repair(robot.getLocation());
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+    }
+
     // Util
 
     private boolean tryBuild(RobotType type, Direction dir) throws GameActionException {
+
+        // TODO: Deal with edge case of adjacent archons
+
         if (getRobotController().canBuildRobot(type, dir)) {
             getRobotController().buildRobot(type, dir);
+            last_order = new CommandCommunicator.SpawnOrder(
+                    CommandCommunicator.RobotRole.DEFAULT,
+                    getRobotController().getLocation());
             return true;
         }
         return false;

@@ -10,6 +10,7 @@ public class Cache {
     public static Team OUR_TEAM;
     public static Team OPPONENT_TEAM;
 
+
     public static int MAP_WIDTH;
     public static int MAP_HEIGHT;
 
