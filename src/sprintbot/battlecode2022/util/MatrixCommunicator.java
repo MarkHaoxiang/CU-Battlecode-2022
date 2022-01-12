@@ -29,6 +29,18 @@ public class MatrixCommunicator extends Communicator {
 		int compressed_location = Communicator.compressLocation(location);
 		update(event, compressed_location);
 	}
+
+	/**
+	 * Updates an event to true or false given a MapLocation to shared memory.
+	 * @param event    event type
+	 * @param location MapLocation
+	 * @param state    update to true or false
+	 * @throws GameActionException -
+	 */
+	public static void update(Event event, MapLocation location, boolean state) throws GameActionException {
+		int compressed_location = Communicator.compressLocation(location);
+		update(event, compressed_location, state);
+	}
 	
 	/**
 	 * Updates an event given a compressed location to shared memory.
@@ -48,8 +60,43 @@ public class MatrixCommunicator extends Communicator {
 		}
 		int value = controller.readSharedArray(id);
 		int relative_bit_id = BITS_PER_INTEGER - bit_id % BITS_PER_INTEGER - 1; // count from LSB
-		value &= (1 << relative_bit_id);
-		controller.writeSharedArray(id, value);
+		int new_value = value | (1 << relative_bit_id);
+		if (new_value != value) {
+			controller.writeSharedArray(id, new_value);
+		}
+		// TODO: deleted this
+//		System.out.println(String.format("Matrix: id=%d, value=%d", id, value));
+	}
+
+	/**
+	 * Updates an event to true or false given a compressed location to shared memory.
+	 * @param event               event type
+	 * @param compressed_location compressed location
+	 * @param state               update to true or false
+	 * @throws GameActionException -
+	 */
+	public static void update(Event event, int compressed_location, boolean state) throws GameActionException {
+		int event_bit_id = Communicator.eventNum(event);
+		int bit_id = event_bit_id + BITS_PER_LOCATION * compressed_location; // the bit to change
+		int id = offset + bit_id / BITS_PER_INTEGER; // integer id in shared memory
+		if (Constants.DEBUG && id >= 64) {
+			System.out.println("Who wrote a bug?");
+			System.out.println(compressed_location);
+			System.out.println(event_bit_id);
+			System.out.println(id);
+		}
+		int value = controller.readSharedArray(id);
+		int relative_bit_id = BITS_PER_INTEGER - bit_id % BITS_PER_INTEGER - 1; // count from LSB
+		int new_value;
+		if (state) {
+			new_value = value | (1 << relative_bit_id);
+		}
+		else {
+			new_value = value & ~(1 << relative_bit_id);
+		}
+		if (new_value != value) {
+			controller.writeSharedArray(id, new_value);
+		}
 	}
 	
 	
