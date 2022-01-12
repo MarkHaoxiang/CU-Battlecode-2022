@@ -64,8 +64,6 @@ public class MatrixCommunicator extends Communicator {
 		if (new_value != value) {
 			controller.writeSharedArray(id, new_value);
 		}
-		// TODO: deleted this
-//		System.out.println(String.format("Matrix: id=%d, value=%d", id, value));
 	}
 
 	/**
