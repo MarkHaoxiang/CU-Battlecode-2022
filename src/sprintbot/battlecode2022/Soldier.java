@@ -123,7 +123,7 @@ public class Soldier extends RunnableBot
 	private void observeNearbyEnemies()
 	{
 		// Fetch enemies[] info. Also used later
-		int radius = Cache.controller.getType().actionRadiusSquared;
+		int radius = Cache.controller.getType().visionRadiusSquared;
 		Team opponent = Cache.controller.getTeam().opponent();
 		enemies = Cache.controller.senseNearbyRobots(radius, opponent);
 	}

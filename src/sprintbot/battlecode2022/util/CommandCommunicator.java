@@ -117,14 +117,14 @@ public class CommandCommunicator extends Communicator {
 
     // Rename as fit
     public enum RobotRole {
-        A(0),
-        B(1),
-        C(2),
-        D(3),
+        MINER(0),
+        SOLDIER(1),
+        BUILDER(2),
+        SAGE(3),
         E(4),
         F(5),
         G(6),
-        DEFAULT(7);
+        H(7);
         public final int id;
         RobotRole(int id) {
             this.id = id;
@@ -132,14 +132,30 @@ public class CommandCommunicator extends Communicator {
     }
 
     private static final RobotRole[] int2role = new RobotRole[] {
-            RobotRole.A,
-            RobotRole.B,
-            RobotRole.C,
-            RobotRole.D,
+            RobotRole.MINER,
+            RobotRole.SOLDIER,
+            RobotRole.BUILDER,
+            RobotRole.SAGE,
             RobotRole.E,
             RobotRole.F,
             RobotRole.G
     };
+
+    public static RobotRole type2Role (RobotType type) {
+        switch (type) {
+            case SAGE:
+                return RobotRole.SAGE;
+            case MINER:
+                return RobotRole.MINER;
+            case BUILDER:
+                return RobotRole.BUILDER;
+            case SOLDIER:
+                return RobotRole.SOLDIER;
+            default:
+                System.out.println("Who wrote a bug? type2Role");
+                return RobotRole.H;
+        }
+    }
 
     public static class SpawnOrder {
         public RobotRole role;
@@ -154,7 +170,6 @@ public class CommandCommunicator extends Communicator {
      *
      * @param role role
      * @param target_location location
-     * @throws GameActionException
      */
     public static void spawnMessage(RobotRole role, MapLocation target_location) throws GameActionException {
         spawnMessage(new SpawnOrder(role,target_location));
@@ -163,7 +178,6 @@ public class CommandCommunicator extends Communicator {
     /**
      *
      * @param order - spawn command
-     * @throws GameActionException
      */
     public static void spawnMessage(SpawnOrder order) throws GameActionException {
         RobotRole role = order.role;
@@ -182,12 +196,11 @@ public class CommandCommunicator extends Communicator {
     /**
      *
      * @return spawn command
-     * @throws GameActionException
      */
     public static SpawnOrder getSpawnRole() throws GameActionException {
         if (controller.getType() == RobotType.ARCHON || Cache.age > 0) {
             System.out.println("Who wrote a bug? getSpawnRole A");
-            return new SpawnOrder(RobotRole.DEFAULT,controller.getLocation());
+            return new SpawnOrder(type2Role(controller.getType()),controller.getLocation());
         }
         // Distance 1 first before 2 to account for edge case of two nearby archons
         for (Direction dir : new Direction[] {Direction.NORTH, Direction.EAST,
@@ -210,7 +223,7 @@ public class CommandCommunicator extends Communicator {
                 // Bug catching
                 if (archon_id == -1) {
                     System.out.println("Who wrote a bug? getSpawnRole B");
-                    return new SpawnOrder(RobotRole.DEFAULT,controller.getLocation());
+                    return new SpawnOrder(type2Role(controller.getType()),controller.getLocation());
                 }
                 // Decode message
                 int value = controller.readSharedArray(HEADER_PRIORITY_OFFSET + archon_id);
@@ -223,7 +236,7 @@ public class CommandCommunicator extends Communicator {
             }
         }
         System.out.println("Who wrote a bug? getSpawnRole C");
-        return new SpawnOrder(RobotRole.DEFAULT,controller.getLocation());
+        return new SpawnOrder(type2Role(controller.getType()),controller.getLocation());
     }
 
 }

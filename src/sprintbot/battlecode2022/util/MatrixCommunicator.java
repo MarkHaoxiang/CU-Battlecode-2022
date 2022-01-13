@@ -61,6 +61,10 @@ public class MatrixCommunicator extends Communicator {
 		int value = controller.readSharedArray(id);
 		int relative_bit_id = BITS_PER_INTEGER - bit_id % BITS_PER_INTEGER - 1; // count from LSB
 		int new_value = value | (1 << relative_bit_id);
+		if (new_value > 65535) {
+			System.out.println("Who wrote a bug? Matrix update");
+			System.out.println(new_value);
+		}
 		if (new_value != value) {
 			controller.writeSharedArray(id, new_value);
 		}

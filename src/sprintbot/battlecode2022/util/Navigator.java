@@ -56,7 +56,7 @@ public abstract class Navigator {
 
     public boolean inMap(MapLocation location) {
         if (location == null) return false;
-        return location.x < MAP_WIDTH && location.y < MAP_HEIGHT;
+        return location.x < MAP_WIDTH && location.y < MAP_HEIGHT && location.x >= 0 && location.y >= 0;
     }
 
     public static Integer travelDistance(MapLocation from,

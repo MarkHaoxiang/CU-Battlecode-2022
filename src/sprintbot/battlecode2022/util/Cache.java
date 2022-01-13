@@ -13,7 +13,7 @@ public class Cache
 	public static int MAP_WIDTH;
 	public static int MAP_HEIGHT;
 
-	public static MapLocation MY_SPAWN_LOCATION;
+	public static MapLocation MY_SPAWN_LOCATION = null;
 	
 	// the end of data is marked with -1
 	public static int[] opponent_archon_compressed_locations = new int[64];

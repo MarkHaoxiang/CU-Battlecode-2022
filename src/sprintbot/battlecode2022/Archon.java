@@ -10,6 +10,7 @@ public class Archon extends RunnableBot {
     // Command
     private CommandCommunicator.SpawnOrder last_order = null;
 
+
     // Build Strategy
     private final DefaultBuild default_strategy = new DefaultBuild();
 
@@ -67,23 +68,42 @@ public class Archon extends RunnableBot {
         @Override
         public boolean build() throws GameActionException {
 
-            switch (build_order) {
-                case 0:
-                    if (tryBuild(RobotType.MINER)) {
-                        build_order = (build_order + 1) % 2;
-                        return true;
-                    }
-                    return false;
-                case 1:
-                    if (tryBuild(RobotType.SOLDIER)) {
-                        build_order = (build_order + 1) % 2;
-                        return true;
-                    }
-                    return false;
-                default:
-                    System.out.println("Default build order exception.");
-                    build_order = 0;
-                    return build();
+
+            // Evenly distribute spawning
+            int[] other_archons = CommandCommunicator.getArchonIDList();
+            int archon_num = other_archons.length + 1;
+            Integer ranking = null;
+            for (int i = 0; i < other_archons.length; i ++) {
+                if (other_archons[i] == getRobotController().getID()) {
+                    archon_num --;
+                    ranking = i;
+                }
+            }
+            if (ranking == null) {
+                ranking = 3;
+            }
+            if (getRobotController().getTeamLeadAmount(Cache.OUR_TEAM) < 150
+                    && getRobotController().getRoundNum() % archon_num != ranking) {
+                return false;
+            }
+
+                switch (build_order) {
+                    case 0:
+                        if (tryBuild(RobotType.MINER)) {
+                            build_order = (build_order + 1) % 2;
+                            return true;
+                        }
+                        return false;
+                    case 1:
+                        if (tryBuild(RobotType.SOLDIER)) {
+                            build_order = (build_order + 1) % 2;
+                            return true;
+                        }
+                        return false;
+                    default:
+                        System.out.println("Default build order exception.");
+                        build_order = 0;
+                        return build();
             }
         }
     }
@@ -107,18 +127,22 @@ public class Archon extends RunnableBot {
 
     // Util
 
-    private boolean tryBuild(RobotType type, Direction dir) throws GameActionException {
+    private boolean tryBuild(RobotType type, Direction dir, CommandCommunicator.RobotRole role, MapLocation loc) throws GameActionException {
 
         // TODO: Deal with edge case of adjacent archons
 
         if (getRobotController().canBuildRobot(type, dir)) {
             getRobotController().buildRobot(type, dir);
             last_order = new CommandCommunicator.SpawnOrder(
-                    CommandCommunicator.RobotRole.DEFAULT,
-                    getRobotController().getLocation());
+                    role,
+                    loc);
             return true;
         }
         return false;
+    }
+
+    private boolean tryBuild(RobotType type, Direction dir) throws GameActionException {
+        return tryBuild(type,dir,CommandCommunicator.type2Role(type),getRobotController().getLocation().add(dir));
     }
 
     private boolean tryBuild(RobotType type) throws GameActionException {
@@ -129,6 +153,6 @@ public class Archon extends RunnableBot {
         }
         return false;
     }
-
 }
+
 
