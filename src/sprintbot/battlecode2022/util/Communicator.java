@@ -10,8 +10,8 @@ public class Communicator {
     protected static int MAP_WIDTH;
     protected static int MAP_HEIGHT;
 
-    protected static final int COMPRESSED_SIZE = 8; // compress map to 8*8
-    protected static final int NUM_OF_COMPRESSED_LOCATIONS = 64;
+    protected static final int COMPRESSED_SIZE = 7; // compress map to 7*7
+    public static final int NUM_OF_COMPRESSED_LOCATIONS = 81;
     protected static int X_STEP; // the number of x units compressed to 1
     protected static int Y_STEP;
     protected static int CENTRE_X; // the x coordinate of the centre of the region formed by (x,y) where x<X_step && y<Y_step (SOUTHWEST)
@@ -22,13 +22,15 @@ public class Communicator {
     public enum Event {
         ARCHON, // Opponent Archon
         METAL, // Metal & no Miner around
-        SOLDIER // Opponent Soldier or Sage
+        FRIENDLY_MINER, // Our miner
+        SOLDIER // Opponent Soldier or Sage or Watchtower
     }
 
     public static final Event[] events = {
             Event.ARCHON,
             Event.METAL,
-            Event.SOLDIER
+            Event.SOLDIER,
+            Event.FRIENDLY_MINER
     };
 
     public static void init(RobotController controller) {
@@ -52,6 +54,9 @@ public class Communicator {
                 break;
             case SOLDIER:
                 event_num = 2;
+                break;
+            case FRIENDLY_MINER:
+                event_num = 3;
                 break;
             default: // won't happen
                 throw new IllegalStateException("Unexpected Event: " + event);

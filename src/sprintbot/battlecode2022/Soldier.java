@@ -28,6 +28,20 @@ public class Soldier extends RunnableBot
 	{
 		super.init();
 	}
+
+	@Override
+	public void turn() throws GameActionException
+	{
+		Cache.update();
+
+		observeNearbyEnemies();
+
+		current_attacking_strategy = default_attacking_strategy;
+		current_attacking_strategy.attack();
+
+		current_moving_strategy = default_moving_strategy;
+		current_moving_strategy.move();
+	}
 	
 	// Strategy
 	
@@ -127,18 +141,5 @@ public class Soldier extends RunnableBot
 		Team opponent = Cache.controller.getTeam().opponent();
 		enemies = Cache.controller.senseNearbyRobots(radius, opponent);
 	}
-	
-	@Override
-	public void turn() throws GameActionException
-	{
-		Cache.update();
 
-		observeNearbyEnemies();
-		
-		current_attacking_strategy = default_attacking_strategy;
-		current_attacking_strategy.attack();
-		
-		current_moving_strategy = default_moving_strategy;
-		current_moving_strategy.move();
-	}
 }
