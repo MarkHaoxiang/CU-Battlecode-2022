@@ -1,7 +1,8 @@
-package sprintbot.battlecode2022.util;
+package sprintbot1.battlecode2022.util;
 
 import battlecode.common.*;
 
+import java.util.Map;
 import java.util.Random;
 
 
@@ -56,7 +57,7 @@ public abstract class Navigator {
 
     public boolean inMap(MapLocation location) {
         if (location == null) return false;
-        return location.x < MAP_WIDTH && location.y < MAP_HEIGHT && location.x >= 0 && location.y >= 0;
+        return location.x < MAP_WIDTH && location.y < MAP_HEIGHT;
     }
 
     public static Integer travelDistance(MapLocation from,
@@ -72,7 +73,8 @@ public abstract class Navigator {
     }
 
     public MapLocation randomLocation() {
-        return new MapLocation(random.nextInt() % MAP_WIDTH, random.nextInt() % MAP_HEIGHT);
+        return new MapLocation((random.nextInt() % MAP_WIDTH + MAP_WIDTH) % MAP_WIDTH, (random.nextInt() % MAP_HEIGHT + MAP_HEIGHT) % MAP_HEIGHT);
+//        return new MapLocation(random.nextInt() % MAP_WIDTH, random.nextInt() % MAP_HEIGHT);
     }
 
     /**
