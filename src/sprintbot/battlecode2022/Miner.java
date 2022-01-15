@@ -55,7 +55,7 @@ public class Miner extends RunnableBot
 		current_mining_strategy.mine();
 
 
-		if (Cache.opponent_soldiers.length > 1 || state == MinerState.RUNNING) {
+		if (state == MinerState.RUNNING || run_strategy.should_run()) {
 			current_moving_strategy.close();
 			current_moving_strategy = run_strategy;
 		}
@@ -310,15 +310,28 @@ public class Miner extends RunnableBot
 			return;
 		}
 
+		public boolean should_run () {
+			RobotController controller = getRobotController();
+			if (Cache.opponent_soldiers.length > Cache.friendly_soldiers.length
+					|| controller.getHealth() < HP_THRESHOLD
+					|| Cache.opponent_total_damage > controller.getHealth()) {
+				return true;
+			}
+			return false;
+		}
+
 		@Override
 		public boolean move() throws GameActionException {
 			RobotController controller = getRobotController();
 			Direction direction = null;
 			Integer closest = Integer.MAX_VALUE;
-			if (Cache.opponent_soldiers.length > Cache.friendly_soldiers.length
-					|| controller.getHealth() < HP_THRESHOLD
-					|| Cache.opponent_total_damage > controller.getHealth()) {
+			if (should_run()) {
 				state = MinerState.RUNNING;
+
+				//TODO: Where should we run to? Base archon? Closest archon? Can we send archon locations?
+				// Away from opponent doesn't work well
+
+				/*
 				for (RobotInfo robot : Cache.opponent_soldiers) {
 					int attack_radius = robot.getType().actionRadiusSquared;
 					int distance = attack_radius-controller.getLocation().distanceSquaredTo(robot.getLocation());
@@ -326,9 +339,13 @@ public class Miner extends RunnableBot
 						closest = distance;
 						direction = controller.getLocation().directionTo(robot.getLocation()).opposite();
 					}
+
 				}
+				*/
+				if (navigator.move(Cache.MY_SPAWN_LOCATION) == Navigator.MoveResult.SUCCESS) return true;
 			}
 
+			/*
 			if (direction != null) {
 				if (navigator.move(direction) == Navigator.MoveResult.SUCCESS) {
 					return true;
@@ -337,6 +354,8 @@ public class Miner extends RunnableBot
 					if (navigator.move(Cache.MY_SPAWN_LOCATION) == Navigator.MoveResult.SUCCESS) return true;
 				}
 			}
+			*/
+
 			if (state == MinerState.RUNNING) {
 				state = MinerState.SEARCHING;
 			}

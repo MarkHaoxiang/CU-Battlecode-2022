@@ -1,6 +1,8 @@
 package sprintbot.battlecode2022.util;
 
 import battlecode.common.*;
+import sprintbot.battlecode2022.Archon;
+
 public class CommandCommunicator extends Communicator {
 
     private static final int BITS_FOR_ARCHON_IDS = 10;
@@ -187,11 +189,10 @@ public class CommandCommunicator extends Communicator {
             return;
         }
         int value = controller.readSharedArray(HEADER_PRIORITY_OFFSET + archon_id);
-        value = value + (role.id << 12) + (target_location.x << 6) + target_location.y;
+        value = value + (role.id << 12) + (target_location.x << 6) + target_location.y +1;
         //System.out.println(HEADER_PRIORITY_OFFSET + archon_id);
         controller.writeSharedArray(HEADER_PRIORITY_OFFSET + archon_id,value);
     }
-
 
     /**
      *
@@ -227,6 +228,10 @@ public class CommandCommunicator extends Communicator {
                 }
                 // Decode message
                 int value = controller.readSharedArray(HEADER_PRIORITY_OFFSET + archon_id);
+                if ((value&0b111111) == 0) {
+                    System.out.println("No spawn message. Theres a bug.");
+                }
+                value --;
                 return new SpawnOrder(
                         int2role[(value & (0b11 << 12))>>>12],
                         new MapLocation(
@@ -237,6 +242,48 @@ public class CommandCommunicator extends Communicator {
         }
         System.out.println("Who wrote a bug? getSpawnRole C");
         return new SpawnOrder(type2Role(controller.getType()),controller.getLocation());
+    }
+
+    public static void updateTeamTotalSpawn() throws GameActionException {
+        if (controller.getType() != RobotType.ARCHON) {
+            System.out.println("Who wrote a bug? updateSpawnA");
+            return;
+        }
+        boolean am_i_in = false;
+        int[] archons = getArchonIDList();
+        for (int i = 0; i < archons.length; i ++) {
+            if (archons[i] == controller.getID()) {
+                am_i_in = true;
+            }
+            int value = controller.readSharedArray(HEADER_PRIORITY_OFFSET + i);
+            if ((value&0b111111) == 0) {
+                continue;
+            }
+            RobotRole role = int2role[(value & (0b11 << 12))>>>12];
+            switch (role) {
+                case MINER:
+                    Archon.team_total_miners += 1;
+                    break;
+                case SOLDIER:
+                    Archon.team_total_soldiers += 1;
+                    break;
+            }
+        }
+        if (!am_i_in) {
+            int value = controller.readSharedArray(HEADER_PRIORITY_OFFSET + 3);
+            if ((value&0b111111) == 0) {
+                return;
+            }
+            RobotRole role = int2role[(value & (0b11 << 12))>>>12];
+            switch (role) {
+                case MINER:
+                    Archon.team_total_miners += 1;
+                    break;
+                case SOLDIER:
+                    Archon.team_total_soldiers += 1;
+                    break;
+            }
+        }
     }
 
 }

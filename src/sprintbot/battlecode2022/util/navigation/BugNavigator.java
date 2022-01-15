@@ -31,7 +31,6 @@ public class BugNavigator extends Navigator {
             throws GameActionException {
 
 
-
         MapLocation current_location = controller.getLocation();
 
         // Is target out of the map
@@ -47,12 +46,18 @@ public class BugNavigator extends Navigator {
         }
 
         // Our miners have priority, don't disturb them
+        // Buildings are walls
         if (current_location.distanceSquaredTo(target_location) <= 2
                 && controller.canSenseLocation(target_location)) {
             RobotInfo robot = controller.senseRobotAtLocation(target_location);
             if (robot != null
                     && robot.getTeam() == Cache.OUR_TEAM
                     && robot.getType() == RobotType.MINER) {
+                return MoveResult.IMPOSSIBLE;
+            }
+            if (robot != null
+                    && robot.getType().isBuilding()
+                    && robot.getMode().canMove == false) {
                 return MoveResult.IMPOSSIBLE;
             }
         }

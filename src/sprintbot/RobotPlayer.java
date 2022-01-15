@@ -76,7 +76,7 @@ public strictfp class RobotPlayer
 				// GameActionException, so it's more likely to be a bug in our code.
 				System.out.println(rc.getType() + " Exception");
 				e.printStackTrace();
-				controller.resign();
+				//controller.resign();
 				
 			} finally
 			{
