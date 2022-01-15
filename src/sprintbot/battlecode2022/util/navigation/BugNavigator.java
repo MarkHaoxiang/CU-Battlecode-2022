@@ -1,5 +1,7 @@
 package sprintbot.battlecode2022.util.navigation;
 
+import sprintbot.battlecode2022.util.Cache;
+import sprintbot.battlecode2022.util.Constants;
 import sprintbot.battlecode2022.util.Navigator;
 import battlecode.common.*;
 
@@ -27,21 +29,43 @@ public class BugNavigator extends Navigator {
     // Bug Pathing
     public MoveResult move(MapLocation target_location)
             throws GameActionException {
-        // Is it ready
-        if (controller.getMovementCooldownTurns() > 0)
-            return MoveResult.FAIL;
+
+
 
         MapLocation current_location = controller.getLocation();
+
         // Is target out of the map
         if (target_location == null ||
                 !controller.onTheMap(current_location.add(
                         current_location.directionTo(
                                 target_location)))) return MoveResult.IMPOSSIBLE;
+
         // At destination
         if (target_location.equals(current_location)) {
             is_bugging = false;
             return MoveResult.REACHED;
         }
+
+        // Our miners have priority, don't disturb them
+        if (current_location.distanceSquaredTo(target_location) <= 2
+                && controller.canSenseLocation(target_location)) {
+            RobotInfo robot = controller.senseRobotAtLocation(target_location);
+            if (robot != null
+                    && robot.getTeam() == Cache.OUR_TEAM
+                    && robot.getType() == RobotType.MINER) {
+                return MoveResult.IMPOSSIBLE;
+            }
+        }
+
+        if (Constants.DEBUG) {
+            controller.setIndicatorLine(current_location,target_location,255,255,0);
+        }
+
+
+        // Is it ready
+        if (controller.getMovementCooldownTurns() > 0)
+            return MoveResult.FAIL;
+
         // Target change, stop bugging
         if (target_location != prev_target) {
             is_bugging = false;

@@ -42,6 +42,7 @@ public class MatrixCommunicator extends Communicator {
 	 */
 	public static void update(Event event, MapLocation location, boolean state) throws GameActionException {
 		int compressed_location = Communicator.compressLocation(location);
+		update(event,compressed_location,state);
 	}
 	
 	/**
@@ -113,11 +114,11 @@ public class MatrixCommunicator extends Communicator {
 		}
 	}
 
-	public static boolean read (Event event, MapLocation location) throws GameActionException {
+	public static Boolean read (Event event, MapLocation location) throws GameActionException {
 		return read(event,Communicator.compressLocation(location));
 	}
 
-	public static boolean read(Event event, int compressed_location) throws GameActionException {
+	public static Boolean read(Event event, int compressed_location) throws GameActionException {
 		int event_bit_id = Communicator.eventNum(event);
 		int bit_id = event_bit_id + BITS_PER_LOCATION * compressed_location; // the bit to change
 		int id = offset + bit_id / BITS_PER_INTEGER; // integer id in shared memory

@@ -14,12 +14,21 @@ public class Miner extends RunnableBot
 	MapLocation assigned_location = null;
 
 	// Move towards metal strategy (or it could be scouting strategy, or etc., but basically it's a strategy to move)
-	private MoveStrategy current_moving_strategy;
-	private final DefaultMoveStrategy default_moving_strategy = new DefaultMoveStrategy();
+	private final SearchMoveStrategy search_moving_strategy = new SearchMoveStrategy();
+	private MoveStrategy current_moving_strategy = search_moving_strategy;
 	// Same here
 	private MineStrategy current_mining_strategy;
 	private final DefaultMineStrategy default_mining_strategy = new DefaultMineStrategy();
 	private final RunStrategy run_strategy = new RunStrategy();
+
+	enum MinerState {
+		SEARCHING,
+		MINING,
+		RUNNING
+	};
+
+	protected MinerState state = MinerState.SEARCHING;
+	public static final int LEAD_MINE_THRESHOLD = 2; // Do not mine if <= 2
 	
 	public Miner(RobotController rc) throws GameActionException
 	{
@@ -35,126 +44,282 @@ public class Miner extends RunnableBot
 		assigned_location = order.loc;
 		Cache.MY_SPAWN_LOCATION = getRobotController().getLocation();
 	}
+
+	@Override
+	public void turn() throws GameActionException
+	{
+		Cache.update();
+
+		// Local variables save bytecode -> save to Cache saves more?
+		current_mining_strategy = default_mining_strategy;
+		current_mining_strategy.mine();
+
+
+		if (Cache.opponent_soldiers.length > 1 || state == MinerState.RUNNING) {
+			current_moving_strategy.close();
+			current_moving_strategy = run_strategy;
+		}
+		else if (state == MinerState.SEARCHING) {
+			current_moving_strategy.close();
+			current_moving_strategy = search_moving_strategy;
+		}
+
+		if (Constants.DEBUG) {
+			getRobotController().setIndicatorString(current_moving_strategy.toString());
+		}
+
+		current_moving_strategy.move();
+	}
 	
 	// Strategy
 	
 	interface MoveStrategy
 	{
 		boolean move() throws GameActionException;
+		void close() throws GameActionException;
 	}
 	
 	interface MineStrategy
 	{
 		boolean mine() throws GameActionException;
 	}
-	
-	class DefaultMoveStrategy implements MoveStrategy
+
+
+	// Find a good patch of metal to mine
+	class SearchMoveStrategy implements MoveStrategy
 	{
 		private MapLocation move_target = null;
-		boolean is_random = false; // whether move_target is random or not
-		private final int GIVE_UP_THRESHOLD_TURN = 1;
+		private final int GIVE_UP_THRESHOLD_TURN = 3;
 		/* Number of turns to give up moving if repeatedly stuck
 		   Note that it is necessary because it might get surrounded by robots
 		   It is also probably related to bytecode limit, but we don't account for that now */
-		private static final int HP_THRESHOLD = 10;
+
+		public SearchMoveStrategy () {
+
+			// Select a direction to scout
+				// Did archon assign a location?
+			if (assigned_location != null && assigned_location != getRobotController().getLocation()) {
+				move_target = assigned_location;
+				assigned_location = null;
+			}
+			else if (move_target == null) {
+				move_target = navigator.randomLocation();
+			}
+		}
+
+		@Override
+		public void close() throws GameActionException {
+			return;
+		}
 
 		@Override
 		public boolean move() throws GameActionException
 		{
-			// Re-add the metal location to matrix when HP is too low
-			if (move_target != null && navigator.inMap(move_target) && Cache.controller.getHealth() < HP_THRESHOLD) {
-				MatrixCommunicator.update(Communicator.Event.METAL, move_target);
-			}
+			MapLocation closest = null;
+			MapLocation my_location = getRobotController().getLocation();
+			int closest_distance = 9999;
 
-			// Move towards the closest lead in vision if found
-			MapLocation[] lead_spots = Cache.controller.senseNearbyLocationsWithLead(RobotType.MINER.visionRadiusSquared);
-			boolean should_mine = false;
-			MapLocation lead_target = null;
-			if (lead_spots.length > 0)
-			{
-				int min_v = Integer.MAX_VALUE;
-				for (MapLocation lead_spot: lead_spots) {
-					int v = Navigator.travelDistance(Cache.controller.getLocation(), lead_spot);
-					for (MapLocation loc : navigator.adjacentLocationWithCenter(lead_spot)) {
-						if (Cache.controller.canSenseLocation(loc)) {
-							RobotInfo robot = Cache.controller.senseRobotAtLocation(loc);
-							if (robot != null
-									&& robot.getTeam().isPlayer()
-									&& robot.getType() == RobotType.MINER) {
-								v = Integer.MAX_VALUE;
+			if (Cache.lead_spots.length > 0) {
+				for (MapLocation lead_spot : Cache.lead_spots) {
+					int d = Navigator.travelDistance(my_location,lead_spot);
+					int lead_amt = getRobotController().senseLead(lead_spot);
+					if (lead_amt <= LEAD_MINE_THRESHOLD) {
+						// Not enough lead
+						continue;
+					}
+					if (lead_amt < 8 && Cache.friendly_villagers.length >= 1) {
+						// Don't even bother, someone will mine it eventually
+						continue;
+					}
+					if (lead_amt < 20) {
+						boolean someone_closer = false;
+						for (RobotInfo robot : Cache.friendly_villagers) {
+							if (robot.getType() == RobotType.MINER
+									&& Navigator.travelDistance(robot.getLocation(),my_location) < d) {
+								// Don't bother, someone else is in a better position to mine
+								someone_closer = true;
 							}
 						}
+						if (someone_closer) continue;
 					}
-					if (v < min_v) {
-						min_v = v;
-						lead_target = lead_spot;
+					if (MatrixCommunicator.read(Communicator.Event.FRIENDLY_MINER,lead_spot) && lead_amt < 10) {
+						// Friendly miner already allocated
+						continue;
 					}
-				}
-				if (min_v < Integer.MAX_VALUE) {
-					should_mine = true;
+					// Mining location found!
+					if (d < closest_distance) {
+						closest_distance = d;
+						closest = lead_spot;
+					}
+					move_target = closest;
+					state = MinerState.MINING;
 				}
 			}
 
-			if (should_mine) {
-				// not report the lead location, but save the location in this miner's instance state
-				move_target = lead_target;
-				is_random = false;
-
-				Navigator.MoveResult move_result = navigator.move(lead_target);
-				if (move_result == Navigator.MoveResult.IMPOSSIBLE ||
-						move_result == Navigator.MoveResult.REACHED)
+			// No free lead nearby
+			// TODO: Check nearby communicator map
+			if (closest == null
+					&& move_target != null
+					&& getRobotController().canSenseLocation(move_target)) {
+				int lead = getRobotController().senseLead(move_target);
+				if (lead >= 1 && lead <= 2) {
+					// Someone else mined it
+					move_target = null;
+				}
+			}
+			if (move_target == null) {
+				move_target = navigator.randomLocation();
+			}
+			Navigator.MoveResult move_result = navigator.move(move_target);
+			switch (move_result) {
+				case FAIL:
 					return false;
-			}
-
-			else // If no leads nearby or shouldn't mine nearby lead, either moves towards the closest reported location and erases that location from matrix or chooses a random location
-			{
-				Navigator.MoveResult move_result = navigator.move(move_target);
-				// Only changes the target if moving fails
-				int tot_attempts = 0;
-
-				while (move_result == Navigator.MoveResult.IMPOSSIBLE ||
-						move_result == Navigator.MoveResult.REACHED)
-				{
-					tot_attempts++;
-					if (tot_attempts > GIVE_UP_THRESHOLD_TURN) // Give up on further attempts
-						return false;
-
-					MatrixCommunicator.read(Communicator.Event.METAL);
-					move_target = Communicator.getClosestFromCompressedLocationArray(Cache.metal_compressed_locations,
-							Cache.controller.getLocation());
-					is_random = false;
-
-					// If nothing is available then choose a random location
-					if (move_target == null) {
-						move_target = navigator.randomLocation();
-						is_random = true;
+				case IMPOSSIBLE:
+					move_target = navigator.randomLocation();
+					navigator.move(move_target);
+					return true;
+				case REACHED:
+					if (closest != null
+							&& !MatrixCommunicator.read(Communicator.Event.FRIENDLY_MINER,closest)) {
+						// Maybe adjacent square miner is already camping this location
+						//getRobotController().setIndicatorString(Integer.toString(Cache.friendly_villagers.length));
+						//TODO: Needs improvement
+						for (RobotInfo robot : Cache.friendly_villagers) {
+							if (robot.getType() == RobotType.MINER
+									&& Navigator.travelDistance(robot.getLocation(),my_location) <= 3
+									&& MatrixCommunicator.read(Communicator.Event.FRIENDLY_MINER,robot.getLocation())) {
+								return true;
+							}
+						}
+						state = MinerState.MINING;
+						current_moving_strategy.close();
+						current_moving_strategy = new CampMoveStrategy(closest);
 					}
+					else if (closest == null) {
+						move_target = navigator.randomLocation();
+						navigator.move(move_target);
+					}
+					return true;
+				case SUCCESS:
+				default:
+					return true;
+			}
+		}
+	}
 
-					move_result = navigator.move(move_target);
+	// We found the patch. Mine it. Claim it if mostly mined out.
+	class CampMoveStrategy implements MoveStrategy {
+
+		private MapLocation move_target = null;
+		private MapLocation[] mine_locations;
+		private MapLocation start_location;
+
+		public CampMoveStrategy(MapLocation location) throws GameActionException {
+			mine_locations = Cache.lead_spots;
+			start_location = location;
+			labelMining();
+		}
+
+		@Override
+		public void close() throws GameActionException {
+			MatrixCommunicator.update(Communicator.Event.FRIENDLY_MINER,start_location,false);
+		}
+
+		@Override
+		public boolean move() throws GameActionException {
+
+			if (Constants.DEBUG) {
+				String temp = MatrixCommunicator.read(Communicator.Event.FRIENDLY_MINER,getRobotController().getLocation()).toString();
+				temp = temp + start_location.toString();
+				getRobotController().setIndicatorString(temp);
+			}
+
+			MapLocation closest = null;
+			MapLocation my_location = getRobotController().getLocation();
+			int closest_distance = 9999;
+			move_target = start_location;
+
+			// Better place to mine
+			if (Cache.lead_spots.length > mine_locations.length && Cache.lead_amount > 50
+					&&
+					(Communicator.compressLocation(my_location) == Communicator.compressLocation(start_location)
+							|| !MatrixCommunicator.read(Communicator.Event.FRIENDLY_MINER,my_location)))
+			{
+				close();
+				mine_locations = Cache.lead_spots;
+				start_location = getRobotController().getLocation();
+				labelMining();
+			}
+
+
+			int mine_potential = 0;
+			if (mine_locations.length > 0) {
+				for (MapLocation lead_spot : mine_locations) {
+					if (!getRobotController().canSenseLocation(lead_spot)) continue;
+ 					int lead_amount = getRobotController().senseLead(lead_spot);
+					mine_potential += lead_amount;
+					if (lead_amount <= LEAD_MINE_THRESHOLD) {
+						// Not enough lead
+						continue;
+					}
+					if (MatrixCommunicator.read(Communicator.Event.FRIENDLY_MINER,lead_spot)) {
+						// Friendly miner already allocated
+						continue;
+					}
+					int d = Navigator.travelDistance(my_location,lead_spot);
+					// Mining location found!
+					if (d < closest_distance) {
+						closest_distance = d;
+						closest = lead_spot;
+					}
 				}
 
-				if (!is_random && move_target != null) {
-					// erase the location from the matrix
-					MatrixCommunicator.update(Communicator.Event.METAL, move_target, false);
+				if (closest != null) {
+					move_target = closest;
+				}
+				else if (mine_locations.length <= 1) {
+					close();
+					state = MinerState.SEARCHING;
+				}
+				Navigator.MoveResult move_result = navigator.move(move_target);
+				switch (move_result) {
+					case FAIL:
+						return false;
+					case SUCCESS:
+					default:
+						return true;
 				}
 			}
-			return true;
+			else {
+				return false;
+			}
 		}
+
+		private void labelMining() throws GameActionException {
+			MatrixCommunicator.update(Communicator.Event.FRIENDLY_MINER,start_location);
+		}
+
 	}
 
 	class RunStrategy implements MoveStrategy
 	{
+		private final int HP_THRESHOLD = 15;
+
+		@Override
+		public void close() throws GameActionException {
+			return;
+		}
+
 		@Override
 		public boolean move() throws GameActionException {
 			RobotController controller = getRobotController();
-			RobotInfo[] robots = controller.senseNearbyRobots();
-
 			Direction direction = null;
-
 			Integer closest = Integer.MAX_VALUE;
-			for (RobotInfo robot : robots) {
-				if (robot.getTeam() != Cache.OUR_TEAM &&
-						(robot.getType() == RobotType.SOLDIER || robot.getType() == RobotType.SAGE || robot.getType() == RobotType.WATCHTOWER)) {
+			if (Cache.opponent_soldiers.length > Cache.friendly_soldiers.length
+					|| controller.getHealth() < HP_THRESHOLD
+					|| Cache.opponent_total_damage > controller.getHealth()) {
+				state = MinerState.RUNNING;
+				for (RobotInfo robot : Cache.opponent_soldiers) {
 					int attack_radius = robot.getType().actionRadiusSquared;
 					int distance = attack_radius-controller.getLocation().distanceSquaredTo(robot.getLocation());
 					if (closest > distance) {
@@ -172,6 +337,9 @@ public class Miner extends RunnableBot
 					if (navigator.move(Cache.MY_SPAWN_LOCATION) == Navigator.MoveResult.SUCCESS) return true;
 				}
 			}
+			if (state == MinerState.RUNNING) {
+				state = MinerState.SEARCHING;
+			}
 			return false;
 		}
 	}
@@ -181,7 +349,6 @@ public class Miner extends RunnableBot
 		@Override
 		public boolean mine() throws GameActionException
 		{
-			// TODO: Use better strategy?, like farming? Prioritize mining grids that are close to enemy workers?
 			// Try to mine on squares around us. (Still uses the default mining method)
 			MapLocation me = Cache.controller.getLocation();
 			for (int dx = -1; dx <= 1; dx++)
@@ -192,47 +359,11 @@ public class Miner extends RunnableBot
 					// You can mine multiple times per turn!
 					while (Cache.controller.canMineGold(mineLocation))
 						Cache.controller.mineGold(mineLocation);
-					while (Cache.controller.canMineLead(mineLocation) && Cache.controller.senseLead(mineLocation) > 2) {
+					while (Cache.controller.canMineLead(mineLocation) && Cache.controller.senseLead(mineLocation) > LEAD_MINE_THRESHOLD) {
 						Cache.controller.mineLead(mineLocation);
 					}
 				}
 			return true;
 		}
-	}
-	
-	private void observeNearbyEnemies() throws GameActionException
-	{
-		int radius = Cache.controller.getType().actionRadiusSquared;
-		Team opponent = Cache.controller.getTeam().opponent();
-		RobotInfo[]
-				enemies =
-				Cache.controller.senseNearbyRobots(radius, opponent);
-		// TODO: Make full use of enemy information here
-		if (enemies.length > 0)
-		{
-			MapLocation toAttack = enemies[0].location;
-			// Upload enemy locations, here only the first one is uploaded for easier debugging
-			QueueCommunicator.push(Communicator.Event.SOLDIER, Communicator.compressLocation(toAttack));
-		}
-	}
-	
-	@Override
-	public void turn() throws GameActionException
-	{
-		
-		Cache.update();
-		
-		// Local variables save bytecode -> save to Cache saves more?
-		
-		observeNearbyEnemies();
-		
-		current_mining_strategy = default_mining_strategy;
-		current_mining_strategy.mine();
-		
-		current_moving_strategy = run_strategy;
-		//current_moving_strategy = less_gathering_move_strategy;
-		if (!current_moving_strategy.move());
-			current_moving_strategy = default_moving_strategy;
-			current_moving_strategy.move();
 	}
 }

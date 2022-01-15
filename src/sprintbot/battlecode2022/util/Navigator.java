@@ -1,4 +1,4 @@
-package sprintbot1.battlecode2022.util;
+package sprintbot.battlecode2022.util;
 
 import battlecode.common.*;
 
@@ -72,7 +72,7 @@ public abstract class Navigator {
         return new int[]{to.x - from.x, to.y - from.y};
     }
 
-    public MapLocation randomLocation() {
+    public  MapLocation randomLocation() {
         return new MapLocation((random.nextInt() % MAP_WIDTH + MAP_WIDTH) % MAP_WIDTH, (random.nextInt() % MAP_HEIGHT + MAP_HEIGHT) % MAP_HEIGHT);
 //        return new MapLocation(random.nextInt() % MAP_WIDTH, random.nextInt() % MAP_HEIGHT);
     }

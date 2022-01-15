@@ -1,8 +1,8 @@
-package sprintbot1.battlecode2022;
+package sprintbot.battlecode2022;
 
 import battlecode.common.*;
-import sprintbot1.RunnableBot;
-import sprintbot1.battlecode2022.util.*;
+import sprintbot.RunnableBot;
+import sprintbot.battlecode2022.util.*;
 
 import java.util.Arrays;
 import java.util.Comparator;
