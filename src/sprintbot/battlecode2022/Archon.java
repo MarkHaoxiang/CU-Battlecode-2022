@@ -33,6 +33,8 @@ public class Archon extends RunnableBot {
     @Override
     public void turn() throws GameActionException {
 
+        Cache.update();
+
         MatrixCommunicator.read(Communicator.Event.SOLDIER);
         MatrixCommunicator.read(Communicator.Event.ARCHON);
 
@@ -44,7 +46,7 @@ public class Archon extends RunnableBot {
             last_order = null;
         }
 
-    CommandCommunicator.updateTeamTotalSpawn();
+        CommandCommunicator.updateTeamTotalSpawn();
         RobotController controller = getRobotController();
 
         BuildStrategy current_build_strategy = default_strategy;
@@ -55,7 +57,7 @@ public class Archon extends RunnableBot {
         // Early game build
         if (Cache.opponent_archon_compressed_locations[0] == -1
                 && Cache.opponent_soldier_compressed_locations[0] == -1
-                && team_total_miners <= Math.max(4*controller.getArchonCount(),8)) {
+                && team_total_miners <= Math.max(3*controller.getArchonCount(), Math.min(8,controller.getMapHeight()*controller.getMapWidth() / 100))) {
             controller.setIndicatorString("Early miner");
             current_build_strategy = peaceful_strategy;
         }
@@ -96,7 +98,8 @@ public class Archon extends RunnableBot {
             if (ranking == null) {
                 ranking = 3;
             }
-            if (getRobotController().getTeamLeadAmount(Cache.OUR_TEAM) < 150
+
+            if (getRobotController().getTeamLeadAmount(Cache.OUR_TEAM) < (getRobotController().getArchonCount()-ranking-1) * 50
                     && getRobotController().getRoundNum() % archon_num != ranking) {
                 return false;
             }
@@ -163,15 +166,23 @@ public class Archon extends RunnableBot {
         @Override
         public boolean repair() throws GameActionException {
             RobotController controller = getRobotController();
-            RobotInfo[] potential = controller.senseNearbyRobots();
-            for (RobotInfo robot : potential) {
-                if (robot.getTeam() == Cache.OUR_TEAM && robot.getHealth() < robot.getType().health) {
-                    if (controller.canRepair(robot.getLocation())) {
-                        controller.repair(robot.getLocation());
-                        return true;
-                    }
+
+            for (RobotInfo robot : Cache.friendly_soldiers) {
+                if (robot.getHealth() < robot.getType().health && controller.canRepair(robot.getLocation())) {
+                    controller.setIndicatorLine(controller.getLocation(),robot.getLocation(),0,255,0);
+                    controller.repair(robot.getLocation());
+                    return true;
                 }
             }
+
+            for (RobotInfo robot : Cache.friendly_villagers) {
+                if (robot.getHealth() < robot.getType().health && controller.canRepair(robot.getLocation())) {
+                    controller.setIndicatorLine(controller.getLocation(),robot.getLocation(),0,255,0);
+                    controller.repair(robot.getLocation());
+                    return true;
+                }
+            }
+
             return false;
         }
     }
@@ -197,10 +208,29 @@ public class Archon extends RunnableBot {
     }
 
     private boolean tryBuild(RobotType type) throws GameActionException {
+        int highest = -9999;
+        Direction highest_dir = null;
         for (Direction dir : Constants.DIRECTIONS) {
-            if (tryBuild(type, dir)) {
-                return true;
+            if (!getRobotController().canBuildRobot(type,dir)) continue;
+            MapLocation loc = getRobotController().getLocation().add(dir);
+            if (getRobotController().onTheMap(loc)) {
+                int score = -getRobotController().senseRubble(loc);
+                if (type == RobotType.MINER && Cache.lead_spots.length > 0) {
+                    for (MapLocation lead : Cache.lead_spots) {
+                        if (getRobotController().senseLead(lead) > Miner.LEAD_MINE_THRESHOLD) {
+                            score = score -10 * Navigator.travelDistance(loc,lead);
+                            break;
+                        }
+                    }
+                }
+                if (score > highest) {
+                    highest = score;
+                    highest_dir = dir;
+                }
             }
+        }
+        if (highest_dir!=null && tryBuild(type, highest_dir)) {
+            return true;
         }
         return false;
     }

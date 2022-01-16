@@ -4,26 +4,16 @@ import battlecode.common.*;
 import sprintbot.RunnableBot;
 import sprintbot.battlecode2022.util.*;
 
-import java.util.Arrays;
-import java.util.Comparator;
-
 public class Soldier extends RunnableBot
 {
 	// Move towards metal strategy (or it could be scouting strategy, or etc., but basically it's a strategy to move)
 	private MoveStrategy current_moving_strategy;
-	private final DefaultMoveStrategy default_moving_strategy = new DefaultMoveStrategy();
-	private final MainForceMoveStrategy main_force_moving_strategy = new MainForceMoveStrategy();
+	private final SearchMoveStrategy search_moving_strategy = new SearchMoveStrategy();
+	private final RetreatMoveStrategy retreat_moving_strategy = new RetreatMoveStrategy();
+	private final FightMoveStrategy fight_moving_strategy = new FightMoveStrategy();
 	// Same here
 	private AttackStrategy current_attacking_strategy;
 	private final DefaultAttackStrategy default_attacking_strategy = new DefaultAttackStrategy();
-	private final MainForceAttackStrategy main_force_attacking_strategy = new MainForceAttackStrategy();
-	private RobotInfo[] enemies;
-	private int opponent_soldier_cnt;
-	private int our_soldier_cnt;
-	private static final int start_main_force = 100; // the round when we switch to main force strategies
-	Direction main_force_direction = null; // invasion direction, not moving direction (doesn't record if retreating)
-	private final boolean is_main_force = Math.random() < 0.7; // 70% soldiers are main force members
-	// TODO: limit max number of soldiers in one gathering? more than one gathering? or just one gathering but line up as a circle?
 
 	public Soldier(RobotController rc) throws GameActionException
 	{
@@ -34,7 +24,8 @@ public class Soldier extends RunnableBot
 	public void init() throws GameActionException
 	{
 		super.init();
-		Communicator.updateMainForceTarget(navigator.randomLocation());
+		MatrixCommunicator.read(Communicator.Event.ARCHON);
+		MatrixCommunicator.read(Communicator.Event.SOLDIER);
 	}
 	
 	// Strategy
@@ -48,261 +39,272 @@ public class Soldier extends RunnableBot
 	{
 		boolean attack() throws GameActionException;
 	}
-	
-	class DefaultMoveStrategy implements MoveStrategy
+
+
+	// Macro
+	class SearchMoveStrategy implements MoveStrategy
 	{
-		private MapLocation move_target = null;
+		private MapLocation move_target;
+		private boolean is_random = false;
 		private final int GIVE_UP_THRESHOLD_TURN = 1;
-		/* Number of turns to give up moving if repeatedly stuck
-		   Note that it is necessary because it might get surrounded by robots
-		   It is also probably related to bytecode limit, but we don't account for that now */
+		private final int IGNORE_SOLDIER_THRESHOLD = 16;
 		
 		@Override
 		public boolean move() throws GameActionException
 		{
-			// Move towards the closest enemy if found
-			// Reuse the enemies[] info fetched in observeNearbyEnemies()
-			
-			if (enemies.length > 0)
-			{
-				Arrays.sort(enemies, new Comparator<RobotInfo>()
-				{
-					@Override
-					public int compare(RobotInfo a, RobotInfo b)
-					{
-						return Navigator.travelDistance(Cache.controller.getLocation(), a.getLocation()).
-								compareTo(Navigator.travelDistance(Cache.controller.getLocation(), b.getLocation()));
-					}
-				});
-				move_target = enemies[0].getLocation();
-				Navigator.MoveResult move_result = navigator.move(move_target);
-				if (move_result == Navigator.MoveResult.IMPOSSIBLE ||
-						move_result == Navigator.MoveResult.REACHED)
-					return false;
-				// TODO: Fix bug here where location might not be uploaded
-				// Report enemy location [COMMUNICATE]
-				MatrixCommunicator.update(Communicator.Event.SOLDIER, move_target);
+
+			// Go for nearby soldiers first
+			MapLocation my_location = getRobotController().getLocation();
+			MapLocation potential_target = Communicator.getClosestFromCompressedLocationArray(Cache.opponent_soldier_compressed_locations,
+					Cache.controller.getLocation());
+
+			if (potential_target != null
+					&& Navigator.travelDistance(my_location,potential_target) <= IGNORE_SOLDIER_THRESHOLD
+					&& potential_target != my_location) {
+				move_target = potential_target;
+				is_random = false;
 			}
-			else // If no enemies nearby, either moves towards the closest reported location or chooses a random location
-			{
-				Navigator.MoveResult move_result = navigator.move(move_target);
-				// Only changes the target if moving fails
-				int tot_attempts = 0;
-				while (move_result == Navigator.MoveResult.IMPOSSIBLE ||
-						move_result == Navigator.MoveResult.REACHED)
-				{
-					// TODO: Fix bug here where location might not be fetched
-					// Update reported location to get the desired target [COMMUNICATE]
-					MatrixCommunicator.read(Communicator.Event.SOLDIER);
-					move_target = Communicator.getClosestFromCompressedLocationArray(Cache.metal_compressed_locations,
-							Cache.controller.getLocation());
-					// If nothing is available then choose a random location
-					if (move_target == null)
-						move_target = navigator.randomLocation();
-					move_result = navigator.move(move_target);
-					tot_attempts++;
-					if (tot_attempts >= GIVE_UP_THRESHOLD_TURN) // Give up on further attempts
-						return false;
+
+			// And then opponent archons
+			if (is_random || move_target == null) {
+				potential_target = Communicator.getClosestFromCompressedLocationArray(Cache.opponent_archon_compressed_locations,
+						Cache.controller.getLocation());
+				if (potential_target != null) {
+					is_random = false;
+					move_target = potential_target;
 				}
 			}
-			return true;
-		}
-	}
-
-	class MainForceMoveStrategy implements MoveStrategy
-	{
-		private MapLocation move_target = null;
-		private final int GIVE_UP_THRESHOLD_TURN = 1;
-		/* Number of turns to give up moving if repeatedly stuck
-		   Note that it is necessary because it might get surrounded by robots
-		   It is also probably related to bytecode limit, but we don't account for that now */
 
 
-		@Override
-		public boolean move() throws GameActionException
-		{
-			move_target = Cache.main_force_target;
+			// If nothing is available then choose a random location
+			if (move_target == null)
+			{
+				is_random = true;
+				//getRobotController().setIndicatorString("Move target random reset");
+				move_target = navigator.randomLocation();
+			}
+
 
 			Navigator.MoveResult move_result = navigator.move(move_target);
 
-			// can easily get stuck in troop
-			int tot_attempts = 0;
-			while (move_result == Navigator.MoveResult.IMPOSSIBLE ||
-					move_result == Navigator.MoveResult.REACHED)
-			{
-				tot_attempts++;
-				if (tot_attempts > GIVE_UP_THRESHOLD_TURN) // Give up on further attempts
+
+			switch (move_result) {
+				case SUCCESS:
+					return true;
+				case REACHED:
+					// Nothing here, go somewhere else
+					MatrixCommunicator.update(Communicator.Event.SOLDIER,my_location,false);
 					return false;
-
-				// choose a random location
-				move_target = navigator.randomLocation();
-
-				move_result = navigator.move(move_target);
+				case IMPOSSIBLE:
+					if (Navigator.travelDistance(my_location,move_target) <= 4) {
+						MatrixCommunicator.update(Communicator.Event.SOLDIER,move_target,false);
+					}
+					//getRobotController().setIndicatorString("Move target random reset");
+					move_target = navigator.randomLocation();
+					is_random = true;
+					if (navigator.move(move_target) == Navigator.MoveResult.SUCCESS) {
+						return true;
+					};
+					return false;
+				case FAIL:
+				default:
+					return false;
 			}
-
-			return true;
 		}
 	}
-	
+
+	class RetreatMoveStrategy implements MoveStrategy
+	{
+
+		int HP_THRESHOLD = 10;
+		@Override
+		public boolean move() throws GameActionException
+		{
+			if (should_run()) {
+
+				RobotController controller = getRobotController();
+				Direction direction = null;
+				Integer closest = Integer.MAX_VALUE;
+
+				for (RobotInfo robot : Cache.opponent_soldiers) {
+					int attack_radius = robot.getType().actionRadiusSquared;
+					int distance = attack_radius-controller.getLocation().distanceSquaredTo(robot.getLocation());
+					if (closest > distance) {
+						closest = distance;
+						direction = controller.getLocation().directionTo(robot.getLocation()).opposite();
+					}
+				}
+				// Greedy move away
+				if (direction != null && navigator.move(controller.getLocation().add(direction).add(direction)) == Navigator.MoveResult.SUCCESS) {
+					return true;
+				}
+				else {
+					if (navigator.move(Cache.MY_SPAWN_LOCATION) == Navigator.MoveResult.SUCCESS) return true;
+				}
+
+			}
+			return false;
+		}
+
+		public boolean should_run () {
+			RobotController controller = getRobotController();
+			if (controller.getHealth() < HP_THRESHOLD) {
+				return true;
+			}
+			return false;
+		}
+	}
+
+	// Micro
+	class FightMoveStrategy implements MoveStrategy {
+
+		private MapLocation move_target;
+
+		@Override
+		public boolean move() throws GameActionException {
+
+			// TODO: Add last seen location memory
+			RobotController controller = getRobotController();
+			MapLocation my_location = controller.getLocation();
+
+			// Not attacking soldier
+			if (Cache.opponent_soldiers.length == 0) {
+				// Prioritize buildings
+				if (Cache.opponent_buildings.length > 0) {
+					if (!my_location.isWithinDistanceSquared(Cache.opponent_buildings[0].getLocation(),
+							RobotType.SOLDIER.actionRadiusSquared)) {
+						move_target = Cache.opponent_buildings[0].getLocation();
+						Navigator.MoveResult move_result = navigator.move(move_target);
+						if (move_result == Navigator.MoveResult.SUCCESS) {
+							return true;
+						}
+						return false;
+					}
+				}
+				else if (Cache.opponent_villagers.length > 0) {
+					move_target = Cache.opponent_villagers[0].getLocation();
+					Navigator.MoveResult move_result = navigator.move(move_target);
+					if (move_result == Navigator.MoveResult.SUCCESS) {
+						return true;
+					}
+					return false;
+				}
+			}
+
+
+			// Should we chase close to dead opponents?
+
+			// Fighting
+			// Assume we can win, code to determine should not be here
+			// Heuristic time
+			double best_score = -9999.0;
+			MapLocation best_location = null;
+
+			for (MapLocation location : navigator.adjacentLocationWithCenter(my_location)) {
+				if (location.equals(my_location) || controller.canMove(my_location.directionTo(location))) {
+					// Consider other unit types?
+					double score;
+					double expected_damage_from_opponents = 0;
+					boolean in_range = false;
+					boolean in_vision = false;
+					for (RobotInfo robot : Cache.opponent_soldiers) {
+						if (robot.getLocation().isWithinDistanceSquared(location,controller.getType().visionRadiusSquared)) {
+							in_vision = true;
+						}
+						if (robot.getLocation().isWithinDistanceSquared(location,robot.getType().actionRadiusSquared)) {
+							in_range = true;
+							int rubble = controller.senseRubble(robot.getLocation());
+							int damage = robot.getType().damage;
+							int base_cooldown = robot.getType().actionCooldown;
+							double expected_damage = damage / ((1.0+(double)rubble/10.0) * (double) base_cooldown / 10.0);
+							expected_damage_from_opponents += expected_damage;
+						}
+					}
+					expected_damage_from_opponents = expected_damage_from_opponents / (double)(Cache.friendly_soldiers.length + 1);
+					// My expected damage output
+					int rubble = controller.senseRubble(location);
+					int damage = controller.getType().damage;
+					int base_cooldown = controller.getType().actionCooldown;
+					double expected_damage = damage / ((1.0+(double)rubble/10.0) * (double) base_cooldown / 10.0);
+
+					if (!in_vision) {
+						continue;
+					}
+
+					// Be aggressive, prioritize our own damage
+					if (Cache.friendly_soldiers.length > Cache.opponent_soldiers.length + 1) {
+						score = expected_damage;
+					}
+					else if (controller.isActionReady() && in_range) {
+						score = expected_damage - expected_damage_from_opponents;
+					}
+					else if (controller.isActionReady() && !in_range) {
+						score = expected_damage * 0.5 - expected_damage_from_opponents;
+					}
+					else {
+						score = expected_damage - expected_damage_from_opponents;
+					}
+					if (score > best_score) {
+						best_score = score;
+						best_location = location;
+					}
+				}
+			}
+
+			if (best_location != null) {
+				Navigator.MoveResult move_result = navigator.move(best_location);
+				if (move_result == Navigator.MoveResult.SUCCESS) {
+					return true;
+				}
+			}
+			return false;
+		}
+	}
+
 	class DefaultAttackStrategy implements AttackStrategy
 	{
 		@Override
 		public boolean attack() throws GameActionException
 		{
-			// TODO: Better implementation like prioritize
-			// Reuse the enemies[] info fetched in observeNearbyEnemies()
-			if (enemies.length > 0)
-			{
-				MapLocation toAttack = enemies[0].location;
-				if (Cache.controller.canAttack(toAttack))
-					Cache.controller.attack(toAttack);
-				// TODO: Upload all enemy locations here if bytecodes permit
-				MatrixCommunicator.update(Communicator.Event.SOLDIER, enemies[0].location);
-			}
-			return true;
-		}
-	}
+			// TODO: Maybe consider potential damage to a robot? Or damage output of opponent>
+			// Currently prioritizes lowest health soldiers
+			int lowest = 9999;
+			MapLocation lowest_location = null;
 
-	class MainForceAttackStrategy implements AttackStrategy
-	{
-		private MapLocation getNearest(int[] compressed_locations) {
-			int min_dist = Integer.MAX_VALUE;
-			MapLocation nearest_location = null;
-			MapLocation my_location = Cache.controller.getLocation();
-			for (int i = 0; i < compressed_locations.length; i++) {
-				if (compressed_locations[i] == -1) {
+			for (RobotInfo robot : Cache.opponent_soldiers) {
+				if (robot.health < lowest && getRobotController().canAttack(robot.getLocation())) {
+					lowest = robot.health;
+					lowest_location = robot.location;
+				}
+			}
+			if (lowest_location != null) {
+				Cache.controller.attack(lowest_location);
+				return true;
+			}
+
+			for (RobotInfo robot : Cache.opponent_buildings) {
+				if (getRobotController().canAttack(robot.getLocation())) {
+					lowest_location = robot.location;
 					break;
 				}
-				MapLocation location = Communicator.unzipCompressedLocation(compressed_locations[i]);
-				int dist = Navigator.travelDistance(my_location, location);
-				if (dist < min_dist) {
-					min_dist = dist;
-					nearest_location = location;
+			}
+			if (lowest_location != null) {
+				Cache.controller.attack(lowest_location);
+				return true;
+			}
+
+			for (RobotInfo robot : Cache.opponent_villagers) {
+				if (robot.health < lowest && getRobotController().canAttack(robot.getLocation())) {
+					lowest = robot.health;
+					lowest_location = robot.location;
 				}
 			}
-			return nearest_location;
+			if (lowest_location != null) {
+				Cache.controller.attack(lowest_location);
+				return true;
+			}
+			return false;
 		}
-
-		private MapLocation getNearest(RobotInfo[] robots) {
-			int min_dist = Integer.MAX_VALUE;
-			MapLocation nearest_location = null;
-			MapLocation my_location = Cache.controller.getLocation();
-			for (int i = 0; i < robots.length; i++) {
-				MapLocation location = robots[i].location;
-				int dist = Navigator.travelDistance(my_location, location);
-				if (dist < min_dist) {
-					min_dist = dist;
-					nearest_location = location;
-				}
-			}
-			return nearest_location;
-		}
-
-		public MapLocation pickNewMainForceTarget() throws GameActionException {
-			// currently, opponent soldier is prioritised over opponent archon. can change the order
-
-			// choose a new target from matrix instead of from nearby enemies
-			MatrixCommunicator.read(Communicator.Event.SOLDIER);
-
-			MapLocation new_target = getNearest(Cache.opponent_soldier_compressed_locations);
-			if (new_target != null) {
-				Communicator.updateMainForceTarget(new_target);
-				return new_target;
-			}
-			else { // no enemies on the map
-				MapLocation nearest_opponent_archon = getNearest(Cache.opponent_archon_compressed_locations);
-				if (nearest_opponent_archon != null) { // nearest opponent archon
-					Communicator.updateMainForceTarget(nearest_opponent_archon);
-					return nearest_opponent_archon;
-				}
-				else { // opponent archon locations unknown -> random location
-					// TODO: can guess opponent archon location?
-					MapLocation random_location = navigator.randomLocation();
-					Communicator.updateMainForceTarget(random_location);
-					return random_location;
-				}
-			}
-		}
-
-
-		@Override
-		public boolean attack() throws GameActionException
-		{
-			if (enemies.length > 0)
-			{
-				// attack no matter how strong/weak we are
-				MapLocation toAttack = getNearest(enemies);
-				if (Cache.controller.canAttack(toAttack))
-					Cache.controller.attack(toAttack);
-
-				// advantage -> move forward
-				if (our_soldier_cnt > opponent_soldier_cnt) {
-					// assume we win, so remove soldier message and add metal message to matrix
-					MatrixCommunicator.update(Communicator.Event.SOLDIER, toAttack, false);
-					MatrixCommunicator.update(Communicator.Event.METAL, toAttack);
-					// move forward
-					Communicator.updateMainForceTarget(toAttack);
-					main_force_direction = Cache.main_force_target.directionTo(toAttack); // not read yet, so the value in Cache is still the original target
-				}
-
-				// disadvantage -> retreat
-				else {
-					MapLocation new_target = Cache.main_force_target.subtract(Cache.main_force_target.directionTo(enemies[0].location));
-					if (new_target.x < 0 || new_target.x >= Cache.MAP_WIDTH || new_target.y < 0 || new_target.y >= Cache.MAP_HEIGHT) {
-						new_target = navigator.randomLocation();
-					}
-					Communicator.updateMainForceTarget(new_target);
-				}
-			}
-
-
-			// no enemies -> pick a new target
-			else {
-				// might be on the way to enemies
-				if (main_force_direction != null) {
-					MapLocation new_target = Cache.main_force_target.add(main_force_direction);
-					if (new_target.x < 0 || new_target.x >= Cache.MAP_WIDTH || new_target.y < 0 || new_target.y >= Cache.MAP_HEIGHT) {
-						pickNewMainForceTarget();
-					}
-					else {
-						Cache.main_force_target = new_target;
-					}
-				}
-				// or just choose a random location
-				else {
-					MapLocation new_target = pickNewMainForceTarget();
-					main_force_direction = Cache.main_force_target.directionTo(new_target);
-				}
-
-			}
-			return true;
-		}
-	}
-
-	private int countSoldiers(RobotInfo[] robots) {
-		int cnt = 0;
-		for (int i = 0; i < robots.length; i++) {
-			RobotType type = robots[i].getType();
-			if (type == RobotType.SOLDIER || type == RobotType.SAGE) {
-				cnt++;
-			}
-		}
-		return cnt;
-	}
-	
-	private void observeNearbyEnemies()
-	{
-		// Fetch enemies[] info. Also used later
-		int radius = Cache.controller.getType().actionRadiusSquared;
-		Team opponent = Cache.controller.getTeam().opponent();
-		enemies = Cache.controller.senseNearbyRobots(radius, opponent);
-		opponent_soldier_cnt = countSoldiers(enemies);
-	}
-
-	// TODO: differentiate vision range and attack range?
-	private void observeNearbyAllies() {
-		int radius = Cache.controller.getType().actionRadiusSquared;
-		our_soldier_cnt = countSoldiers(Cache.controller.senseNearbyRobots(radius, Cache.OUR_TEAM));
 	}
 
 	
@@ -311,20 +313,37 @@ public class Soldier extends RunnableBot
 	{
 		Cache.update();
 
-		observeNearbyEnemies();
 
-		if (is_main_force && Cache.age > start_main_force) {
-			current_attacking_strategy = main_force_attacking_strategy;
-			current_moving_strategy = main_force_moving_strategy;
-			observeNearbyAllies();
+		current_attacking_strategy = default_attacking_strategy;
+
+		if (retreat_moving_strategy.should_run()) {
+			current_moving_strategy = retreat_moving_strategy;
+			getRobotController().setIndicatorString("Retreat");
+		}
+		else if (Cache.opponent_soldiers.length + Cache.opponent_villagers.length + Cache.opponent_buildings.length > 0) {
+			current_moving_strategy = fight_moving_strategy;
+			getRobotController().setIndicatorString("Fight");
 		}
 		else {
-			current_attacking_strategy = default_attacking_strategy;
-			current_moving_strategy = default_moving_strategy;
+			if ((Cache.age & 1) == 1) {
+				MatrixCommunicator.read(Communicator.Event.ARCHON);
+			}
+			else {
+				MatrixCommunicator.read(Communicator.Event.SOLDIER);
+			}
+			current_moving_strategy = search_moving_strategy;
+			getRobotController().setIndicatorString("Search");
 		}
 
-		Communicator.readMainForceTarget();
-		current_attacking_strategy.attack();
-		current_moving_strategy.move();
+		if (getRobotController().isMovementReady()) {
+			current_moving_strategy.move();
+		}
+
+		if (getRobotController().isActionReady()) {
+			current_attacking_strategy.attack();
+		}
+
+		// TODO: Precalculate areas with extra bytecode?
+
 	}
 }

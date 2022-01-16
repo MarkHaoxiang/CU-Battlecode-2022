@@ -208,6 +208,9 @@ public class CommandCommunicator extends Communicator {
                 Direction.SOUTH, Direction.WEST,
                 Direction.NORTHEAST, Direction.SOUTHEAST,
                 Direction.SOUTHWEST, Direction.NORTHWEST}) {
+            if (! controller.onTheMap(controller.getLocation().add(dir))) {
+                continue;
+            }
             RobotInfo robot = controller.senseRobotAtLocation(controller.getLocation().add(dir));
             if (null != robot && robot.getType() == RobotType.ARCHON && robot.getTeam() == Cache.OUR_TEAM) {
                 int id = robot.getID();
