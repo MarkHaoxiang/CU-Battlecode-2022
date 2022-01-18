@@ -139,7 +139,7 @@ public class DPR34Navigator extends Navigator
 		MapLocation current_loc = rc.getLocation();
 		int cur_loc_x = current_loc.x;
 		int cur_loc_y = current_loc.y;
-		if (current_loc == target_loc)
+		if (current_loc.equals(target_loc))
 			return MoveResult.REACHED;
 		MapLocation tmp_loc;
 		int dctx = cur_loc_x - tar_loc_x;
