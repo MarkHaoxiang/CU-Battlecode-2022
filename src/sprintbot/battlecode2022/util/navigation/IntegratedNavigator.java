@@ -5,8 +5,8 @@ import sprintbot.battlecode2022.util.*;
 
 public class IntegratedNavigator extends Navigator
 {
-	private Navigator dpNavigator;
-	private int dpBytecodeCostUpperBound;
+	private Navigator dpWorseNavigator, dpBetterNavigator;
+	private int dpWorseBytecodeCostUpperBound, dpBetterBytecodeCostUpperBound;
 	private final BugNavigator bugNavigator = new BugNavigator(controller);
 	private Navigator currentNavigator = null;
 	private int stuckTurns;
@@ -17,16 +17,22 @@ public class IntegratedNavigator extends Navigator
 		switch (controller.getType().visionRadiusSquared)
 		{
 			case 20:
-				dpNavigator = new DPR20Navigator(controller);
-				dpBytecodeCostUpperBound = 5000; // TODO: Adjust
+				dpWorseNavigator = new DPR16Navigator(controller);
+				dpWorseBytecodeCostUpperBound = 3500;
+				dpBetterNavigator = new DPR20Navigator(controller);
+				dpBetterBytecodeCostUpperBound = 5000;
 				break;
 			case 34:
-				dpNavigator = new DPR34Navigator(controller);
-				dpBytecodeCostUpperBound = 7000; // TODO: Adjust
+				dpWorseNavigator = new DPR20Navigator(controller);
+				dpWorseBytecodeCostUpperBound = 5000;
+				dpBetterNavigator = new DPR34Navigator(controller);
+				dpBetterBytecodeCostUpperBound = 7000; // TODO: Adjust
 				break;
 			case 53:
-				dpNavigator = new DPR53Navigator(controller);
-				dpBytecodeCostUpperBound = 10000; // TODO: Adjust
+				dpWorseNavigator = new DPR34Navigator(controller);
+				dpWorseBytecodeCostUpperBound = 7000;
+				dpBetterNavigator = new DPR53Navigator(controller);
+				dpBetterBytecodeCostUpperBound = 9000; // TODO: Adjust
 				break;
 			default:
 				System.out.printf("Error - detected in IntegratedNavigator - received a vision range of %d which doesn't belong to {20,34,53}\n",
@@ -44,8 +50,10 @@ public class IntegratedNavigator extends Navigator
 			When stuck, try using bug navigator instead
 		*/
 		int bytecodeLeft = Clock.getBytecodesLeft();
-		if (bytecodeLeft > dpBytecodeCostUpperBound && stuckTurns <= 20)
-			currentNavigator = dpNavigator;
+		if (bytecodeLeft > dpBetterBytecodeCostUpperBound && stuckTurns <= 20)
+			currentNavigator = dpBetterNavigator;
+		else if (bytecodeLeft > dpWorseBytecodeCostUpperBound && stuckTurns <= 20)
+			currentNavigator = dpWorseNavigator;
 		else
 			currentNavigator = bugNavigator;
 	}
