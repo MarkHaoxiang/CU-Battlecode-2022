@@ -154,7 +154,7 @@ public class DPR53Navigator extends Navigator
 				return MoveResult.SUCCESS;
 			}
 			else
-				return MoveResult.FAIL;				
+				return MoveResult.FAIL;
 		}
 		//System.out.printf("Check Complete, left = 53\n", Clock.getBytecodesLeft());
 		tmp_loc = current_loc.translate(0,0);

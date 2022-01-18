@@ -4,6 +4,7 @@ import battlecode.common.*;
 import sprintbot.battlecode2022.*;
 import sprintbot.battlecode2022.util.*;
 import sprintbot.battlecode2022.util.navigation.BugNavigator;
+import sprintbot.battlecode2022.util.navigation.IntegratedNavigator;
 
 public abstract class RunnableBot
 {
@@ -17,7 +18,7 @@ public abstract class RunnableBot
 	public RunnableBot(RobotController controller) throws GameActionException
 	{
 		this.controller = controller;
-		this.navigator = new BugNavigator(controller);
+		this.navigator = new IntegratedNavigator(controller);
 		Cache.init(controller);
 		Communicator.init(controller);
 		// Init for strategy, setup before!

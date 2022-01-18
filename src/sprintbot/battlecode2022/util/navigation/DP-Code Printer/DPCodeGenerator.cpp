@@ -8,7 +8,7 @@ import battlecode.common.*;
 import static battlecode.common.Direction.*;
 import sprintbot.battlecode2022.util.Navigator;
 
-public class DPNavigator extends Navigator
+public class DPR)");printf("%d",vision);printf(R"(Navigator extends Navigator
 {
 	private static final int INF_MARBLE = 1000000;
 	private RobotController rc;
@@ -18,14 +18,14 @@ public class DPNavigator extends Navigator
 	private final int Y_BOUND;
 	private final int[] MARBLE_COST_LOOKUP;
 	
-	public DPNavigator(RobotController controller)
+	public DPR)");printf("%d",vision);printf(R"(Navigator(RobotController controller)
 	{
 		super(controller);
 		rc = controller;
 		X_BOUND = rc.getMapWidth() - 1;    // [0, X_BOUND]
 		Y_BOUND = rc.getMapHeight() - 1;
 		MOVE_COOLDOWN = rc.getType().movementCooldown;
-		UPPER_BOUND_TURN_PER_GRID = MOVE_COOLDOWN * 110;
+		UPPER_BOUND_TURN_PER_GRID = MOVE_COOLDOWN * 60;
 		MARBLE_COST_LOOKUP = new int[]{(int) (1.0 * MOVE_COOLDOWN) * 10,
 				(int) (1.1 * MOVE_COOLDOWN) * 10,
 				(int) (1.2 * MOVE_COOLDOWN) * 10,
@@ -145,6 +145,21 @@ public class DPNavigator extends Navigator
 		int cur_loc_y = current_loc.y;
 		if (current_loc == target_loc)
 			return MoveResult.REACHED;
+		MapLocation tmp_loc;
+		int dctx = cur_loc_x - tar_loc_x;
+		int dcty = cur_loc_y - tar_loc_y;
+		int dctd = dctx * dctx + dcty * dcty;
+		if (dctd <= 2)
+		{
+			Direction dir = current_loc.directionTo(target_loc);
+			if (rc.canMove(dir))
+			{
+				rc.move(dir);
+				return MoveResult.SUCCESS;
+			}
+			else
+				return MoveResult.FAIL;				
+		}
 		//System.out.printf("Check Complete, left = %d\n", Clock.getBytecodesLeft());
 )");}
 void printTail(){printf(R"(	}
@@ -152,50 +167,13 @@ void printTail(){printf(R"(	}
 #include <algorithm>
 #include <string>
 const int arrayOffset=15;
-int lenVarName[309],DX[309],DY[309],xyToID[39][39],neighbour[309][19],lenNeighbour[309],dist[309];
-char varName[309][109];
-string eightDirections[]={"","SOUTHWEST","WEST","NORTHWEST","SOUTH","NORTH","SOUTHEAST","EAST","NORTHEAST"};
-pair<int,int> dist_id[309];
+int lenVarName[309],lenRubbleName[309],
+DX[309],DY[309],xyToID[39][39],neighbour[309][19],lenNeighbour[309],dist[309],isOnRim[309],dirQ[309],dirP[309],
+isDPed[309],enc[309],dec[309];
+char varName[309][109],rubbleName[309][109];
+string eightDirections[]={"","NORTHWEST","NORTH","NORTHEAST","EAST","SOUTHEAST","SOUTH","SOUTHWEST","WEST"};
+pair<double,int> dist_id[309];
 int N;
-void tab(){printf("		");}
-void declareToBeZero(int x){tab();printf("int %s = 0;\n",varName[x]);}
-string marbleLookupString(int x)
-{
-	return "MARBLE_COST_LOOKUP[rc.senseRubble(current_loc.translate("+to_string(DX[x])+","+to_string(DY[x])+"))]";
-}
-string marbleCostString(int x)
-{
-	return "((rc.canSenseLocation(current_loc.translate("+to_string(DX[x])+","+to_string(DY[x])+"))) ? ("+marbleLookupString(x)+") : (INF_MARBLE))";
-}
-void declareUponCanMove(int x,int y)
-{
-	tab();
-	printf("int %s = (rc.canMove(%s)) ? (%s + %d) : (INF_MARBLE);\n",varName[x],eightDirections[y].c_str(),marbleCostString(x).c_str(),y);
-}
-void declareUponDP(int x)
-{
-	if (lenNeighbour[x]==1)
-	{
-		tab();
-		printf("int %s = %s + %s;\n",varName[x],varName[neighbour[x][1]],marbleCostString(x).c_str());
-	}
-	else if (lenNeighbour[x]==2)
-	{
-		tab();
-		printf("int %s = Math.min(%s,%s) + %s;\n",varName[x],varName[neighbour[x][1]],varName[neighbour[x][2]],marbleCostString(x).c_str());
-	}
-	else if (lenNeighbour[x]==3)
-	{
-		tab();
-		printf("int %s = Math.min(Math.min(%s,%s),%s) + %s;\n",varName[x],
-		varName[neighbour[x][1]],varName[neighbour[x][2]],varName[neighbour[x][3]],
-		marbleCostString(x).c_str());
-	}
-	else
-	{
-		printf("??????????????\n");
-	}
-}
 void getNodes()
 {
 	N=0;
@@ -214,11 +192,73 @@ void getNodes()
 				std::replace( str_y.begin(), str_y.end(), '-', 'n');
 				string full_string="d_"+str_x+"_"+str_y;
     			strcpy(varName[N], full_string.c_str());
-    			lenVarName[N]=full_string.length();
-    			dist_id[N]=make_pair(max(abs(x),abs(y)),N);
+				full_string="r_"+str_x+"_"+str_y;
+    			strcpy(rubbleName[N], full_string.c_str());
+    			lenRubbleName[N]=full_string.length();
     			dist[N]=max(abs(x),abs(y));
+    			if (x<dist[N] && y==dist[N])
+    				dirQ[N]=1,dirP[N]=x+dist[N]+1;
+    			if (x==dist[N] && y>-dist[N])
+    				dirQ[N]=2,dirP[N]=dist[N]-y+1;
+    			if (x>-dist[N] && y==-dist[N])
+    				dirQ[N]=3,dirP[N]=dist[N]-x+1;
+    			if (x==-dist[N] && y<dist[N])
+    				dirQ[N]=4,dirP[N]=y+dist[N]+1;
+    			dist_id[N]=make_pair(dist[N]*1000+dirQ[N]*100+dirP[N],N);
+    			enc[N]=(x+7)*15+(y+7);
+    			dec[enc[N]]=N;
 			}
 	sort(dist_id+1,dist_id+N+1);
+}
+void stab(){printf("	");}
+void tab(){printf("		");}
+void tab3(){printf("			");}
+void tab4(){printf("				");}
+void tab5(){printf("					");}
+void declareToBeZero(int x){tab();printf("int %s = %s;\n",varName[x],rubbleName[x]);}
+void printMinNeighbour(int x,int from=1){if (!from)return;if (from>=lenNeighbour[x]){printf("%s",varName[neighbour[x][from]]);return;}
+printf("Math.min(");printMinNeighbour(x,from+1);printf(",%s)",varName[neighbour[x][from]]);}
+void printDPVal(int x){printMinNeighbour(x);printf("+%s",rubbleName[x]);}
+void declareUponCanMove(int x,int y)
+{
+	if (lenNeighbour[x])
+	{
+		tab();
+		printf("int %s = Math.min(rc.canMove(%s) ? (%s + %d) : INF_MARBLE,",varName[x],
+						eightDirections[y].c_str(),rubbleName[x],y);
+		printDPVal(x);
+		printf(");\n");
+	}
+	else
+	{
+		tab();
+		printf("int %s = rc.canMove(%s) ? (%s + %d) : INF_MARBLE;\n",varName[x],
+						eightDirections[y].c_str(),rubbleName[x],y);
+	}
+}
+void declareUponDP(int x){tab();printf("int %s = ",varName[x]);printDPVal(x);printf(";\n");}
+void updateDP(int x){tab();printf("%s = Math.min(",varName[x]);printDPVal(x);printf(",%s);\n",varName[x]);}
+void findNeighbour(int x)
+{
+	lenNeighbour[x]=0;
+	for (int dx=-1;dx<=1;dx++)
+		for (int dy=-1;dy<=1;dy++)
+			if (dx!=0 || dy!=0)
+			{
+				int nid=xyToID[DX[x]+dx+arrayOffset][DY[x]+dy+arrayOffset];
+				if (!nid)
+				{
+					isOnRim[x]=1;
+					continue;
+				}
+				if (isDPed[nid] && (DX[nid]!=0 || DY[nid]!=0))
+					neighbour[x][++lenNeighbour[x]]=nid;
+			}
+}
+void declareRubble(int x)
+{
+	tab();printf("tmp_loc = current_loc.translate(%d,%d);\n",DX[x],DY[x]);
+	tab();printf("int %s = rc.canSenseLocation(tmp_loc) ? MARBLE_COST_LOOKUP[rc.senseRubble(tmp_loc)] : INF_MARBLE;\n",rubbleName[x]);
 }
 void calculateDP()
 {
@@ -226,51 +266,53 @@ void calculateDP()
 	{
 		int currentID=dist_id[i].second;
 		int directionID;
+		declareRubble(currentID);
 		if (i==1) declareToBeZero(currentID);
 		else if (i>=2 && i<=9)
 		{
 			directionID=i-1;
+			findNeighbour(currentID);
 			declareUponCanMove(currentID,directionID);
 		}
 		else if (i>=10)
 		{
-			for (int dx=-1;dx<=1;dx++)
-				for (int dy=-1;dy<=1;dy++)
-				{
-					int NX=DX[currentID]+dx;
-					int NY=DY[currentID]+dy;
-					int NID=xyToID[NX+arrayOffset][NY+arrayOffset];
-					if (!NID) continue;
-					if (dist[NID]<dist[currentID])
-						neighbour[currentID][++lenNeighbour[currentID]]=NID;
-				}
+			findNeighbour(currentID);
 			declareUponDP(currentID);
 		}
+		isDPed[currentID]=1;
+	}
+	for (int i=1;i<=N;i++)
+		dist_id[i].first=dist[dist_id[i].second]*1000+(5-dirQ[dist_id[i].second])*100+(99-dirP[dist_id[i].second]);
+	sort(dist_id+1,dist_id+N+1);
+	for (int i=2;i<=N;i++)
+	{
+		int currentID=dist_id[i].second;
+		findNeighbour(currentID);
+		updateDP(currentID);
 	}
 }
-void declareAnswer()
-{
-	tab();
-	printf("int minDistance = 1000000000;\n");
-}
-void minWithAnswer(int x)
-{
-	tab();
-	printf("minDistance = Math.min(minDistance, %s + UPPER_BOUND_TURN_PER_GRID * Math.max(Math.abs(%d + dctx), Math.abs(%d + dcty)));\n",
-	varName[x],DX[x],DY[x]);
-}
+void declareAnswer(){tab();printf("int minDistance = 1000000000;\n");}
+void minWithAnswer(int x){tab3();
+printf("minDistance = Math.min(minDistance, %s + UPPER_BOUND_TURN_PER_GRID * Math.max(Math.abs(%d + dctx), Math.abs(%d + dcty)));\n",
+varName[x],DX[x],DY[x]);}
 void findAnswer()
 {
-	tab();
-	printf("int dctx = cur_loc_x - tar_loc_x;\n");
-	tab();
-	printf("int dcty = cur_loc_y - tar_loc_y;\n");
+	tab();printf("if (dctd <= %d)\n",vision);
+	tab();printf("{\n");
+	tab3();printf("switch ((7-dctx)*15+7-dcty)\n");
+	tab3();printf("{\n");
 	for (int i=1;i<=N;i++)
-		minWithAnswer(i);
+		{tab4();printf("case %d:minDistance=%s;break;\n",enc[i],varName[i]);}
+	tab4();printf("default:System.out.printf(\"Error in DPNavigator: unexpected encoded value \%d\",(7-dctx)*15+7-dcty);break;\n");
+	tab3();printf("}\n");
+	tab();printf("}\n");
+	tab();printf("else\n");
+	tab();printf("{\n");
+	for (int i=1;i<=N;i++)
+		if (isOnRim[i])
+			minWithAnswer(i);
+	tab();printf("}\n");
 }
-void tab3(){printf("			");}
-void tab4(){printf("				");}
-void tab5(){printf("					");}
 void finalTrace()
 {
 	tab();
@@ -299,7 +341,7 @@ void finalTrace()
 }
 int main()
 {
-	vision = 20;
+	vision = 53;
 	freopen("Code.txt","w",stdout);
 	printHead();
 	getNodes();
