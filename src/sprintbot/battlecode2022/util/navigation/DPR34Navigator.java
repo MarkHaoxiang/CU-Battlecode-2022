@@ -137,6 +137,7 @@ public class DPR34Navigator extends Navigator
 				|| tar_loc_x > X_BOUND || tar_loc_y > Y_BOUND)
 			return MoveResult.IMPOSSIBLE;
 		MapLocation current_loc = rc.getLocation();
+		/*
 		if (current_loc.distanceSquaredTo(target_loc) <= 2
 				&& rc.canSenseLocation(target_loc)) {
 			RobotInfo robot = rc.senseRobotAtLocation(target_loc);
@@ -151,6 +152,7 @@ public class DPR34Navigator extends Navigator
 				return MoveResult.IMPOSSIBLE;
 			}
 		}
+		 */
 		int cur_loc_x = current_loc.x;
 		int cur_loc_y = current_loc.y;
 		if (current_loc.equals(target_loc))
