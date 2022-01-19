@@ -121,9 +121,9 @@ public class CommandCommunicator extends Communicator {
     public enum RobotRole {
         MINER(0),
         SOLDIER(1),
-        BUILDER(2),
+        FIGHT_BUILDER(2),
         SAGE(3),
-        E(4),
+        FARM_BUILDER(4),
         F(5),
         G(6),
         H(7);
@@ -136,9 +136,9 @@ public class CommandCommunicator extends Communicator {
     private static final RobotRole[] int2role = new RobotRole[] {
             RobotRole.MINER,
             RobotRole.SOLDIER,
-            RobotRole.BUILDER,
+            RobotRole.FIGHT_BUILDER,
             RobotRole.SAGE,
-            RobotRole.E,
+            RobotRole.FARM_BUILDER,
             RobotRole.F,
             RobotRole.G
     };
@@ -150,7 +150,7 @@ public class CommandCommunicator extends Communicator {
             case MINER:
                 return RobotRole.MINER;
             case BUILDER:
-                return RobotRole.BUILDER;
+                return RobotRole.FIGHT_BUILDER;
             case SOLDIER:
                 return RobotRole.SOLDIER;
             default:
@@ -236,7 +236,7 @@ public class CommandCommunicator extends Communicator {
                 }
                 value --;
                 return new SpawnOrder(
-                        int2role[(value & (0b11 << 12))>>>12],
+                        int2role[(value & (0b111 << 12))>>>12],
                         new MapLocation(
                                 (value >> 6)&0b111111,
                                 value&0b111111
@@ -262,7 +262,7 @@ public class CommandCommunicator extends Communicator {
             if ((value&0b111111) == 0) {
                 continue;
             }
-            RobotRole role = int2role[(value & (0b11 << 12))>>>12];
+            RobotRole role = int2role[(value & (0b111 << 12))>>>12];
             switch (role) {
                 case MINER:
                     Archon.team_total_miners += 1;
@@ -277,7 +277,7 @@ public class CommandCommunicator extends Communicator {
             if ((value&0b111111) == 0) {
                 return;
             }
-            RobotRole role = int2role[(value & (0b11 << 12))>>>12];
+            RobotRole role = int2role[(value & (0b111 << 12))>>>12];
             switch (role) {
                 case MINER:
                     Archon.team_total_miners += 1;

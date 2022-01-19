@@ -47,6 +47,7 @@ public class Cache
 	public static double our_total_damage = 0;
 	public static int our_total_health = 0;
 	public static boolean can_see_archon = false;
+	public static int lowest_health_soldier = 50;
 
 	public static MapLocation[] lead_spots = null;
 	public static int lead_amount = 0;
@@ -109,6 +110,7 @@ public class Cache
 		our_total_damage = 0.0;
 		our_total_health = 0;
 		can_see_archon = false;
+		lowest_health_soldier = 0;
 
 		if (controller.getType() == RobotType.SOLDIER || controller.getType() == RobotType.SAGE) {
 			our_total_damage += (double)controller.getType().damage / (double)controller.getType().actionCooldown * 10.0;
@@ -123,6 +125,9 @@ public class Cache
 					case WATCHTOWER:
 						our_total_damage += (double)unit.getType().damage / (double)unit.getType().actionCooldown * 10.0;
 						our_total_health += unit.getHealth();
+						if (unit.getHealth() < lowest_health_soldier) {
+							lowest_health_soldier = unit.getHealth();
+						}
 						fs ++;
 						break;
 					case MINER:

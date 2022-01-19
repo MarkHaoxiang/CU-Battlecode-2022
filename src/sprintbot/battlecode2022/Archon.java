@@ -11,11 +11,14 @@ public class Archon extends RunnableBot {
 
     // Build Strategy
     private final DefaultBuild default_strategy = new DefaultBuild();
+    private final FarmBuild farm_strategy = new FarmBuild();
     private final PeacefulBuild peaceful_strategy = new PeacefulBuild();
 
     // Archon only
     public static int team_total_miners = 0;
     public static int team_total_soldiers = 0;
+
+    private int FARM_TRANSITION_DISTANCE = 8;
 
     // Repair Strategy
     private final DefaultRepair repair_strategy = new DefaultRepair();
@@ -61,6 +64,16 @@ public class Archon extends RunnableBot {
             controller.setIndicatorString("Early miner");
             current_build_strategy = peaceful_strategy;
         }
+        // Farmer build
+        else {
+            MapLocation closest_enemy = Communicator.getClosestFromCompressedLocationArray(Cache.opponent_soldier_compressed_locations,
+                    Cache.controller.getLocation());
+            if (Navigator.travelDistance(getRobotController().getLocation(),closest_enemy) > FARM_TRANSITION_DISTANCE
+                    && Cache.opponent_soldiers.length == 0) {
+                current_build_strategy = farm_strategy;
+            }
+        }
+
 
         if (controller.isActionReady()) {
             if (current_build_strategy.build());
@@ -162,6 +175,103 @@ public class Archon extends RunnableBot {
         }
     }
 
+    class FarmBuild implements BuildStrategy {
+
+        private int build_order = 1;
+        private int[] farms = new int[8];
+
+        int MAX_FARMER_PER_FARM = 10;
+        int FARM_BUILT_BUFF = 10;
+
+        @Override
+        public boolean build() throws GameActionException {
+
+            // Evenly distribute spawning
+            int[] other_archons = CommandCommunicator.getArchonIDList();
+            int archon_num = other_archons.length + 1;
+            Integer ranking = null;
+            for (int i = 0; i < other_archons.length; i ++) {
+                if (other_archons[i] == getRobotController().getID()) {
+                    archon_num --;
+                    ranking = i;
+                }
+            }
+            if (ranking == null) {
+                ranking = 3;
+            }
+            if (getRobotController().getTeamLeadAmount(Cache.OUR_TEAM) < 150
+                    && getRobotController().getRoundNum() % archon_num != ranking) {
+                return false;
+            }
+
+            switch (build_order) {
+                case 0:
+                    if (tryBuild(RobotType.MINER)) {
+                        build_order = (build_order + 1) % 5;
+                        return true;
+                    }
+                    return false;
+                case 1:
+                case 2:
+                case 4:
+                    if (tryBuild(RobotType.SOLDIER)) {
+                        build_order = (build_order + 1) % 5;
+                        return true;
+                    }
+                    return false;
+                case 3:
+                    double[] danger = new double[8];
+                    double[] score = new double[8];
+                    MapLocation my_location = getRobotController().getLocation();
+                    for (int enemy : Cache.opponent_soldier_compressed_locations) {
+                        if (enemy == -1) break;
+                        MapLocation location = Communicator.unzipCompressedLocation(enemy);
+                        int dir = Navigator.directionToInt(my_location.directionTo(location));
+                        double dist = Navigator.travelDistance(my_location,location);
+                        danger[dir] += 60 - dist;
+                    }
+                    double maximum_score = -9999;
+                    int maximum_direction = -1;
+                    for (int i = 0; i < 8; i ++) {
+                        score[i] = -(danger[i] + danger[(i+1) % 8] * 0.5 + danger[(i+7)%8] * 0.5) + farms[i] * farm_strategy.FARM_BUILT_BUFF;
+                        Direction dir = Navigator.intToDirection(i);
+                        if (farms[i] > MAX_FARMER_PER_FARM || !getRobotController().onTheMap(my_location.add(dir).add(dir).add(dir))) {
+                            score[i] = -9999;
+                        }
+                        if (score[i] > maximum_score) {
+                            maximum_score = score[i];
+                            maximum_direction = i;
+                        }
+                    }
+                    if (maximum_score > -9999) {
+                        Direction dir = Navigator.intToDirection(maximum_direction);
+                        MapLocation farm_location = my_location.add(dir).add(dir).add(dir);
+                        if (tryBuild(RobotType.BUILDER,dir, CommandCommunicator.RobotRole.FARM_BUILDER,farm_location)) {
+                            build_order = (build_order + 1) % 5;
+                            farms[maximum_direction] += 1;
+                            //System.out.println("Building farmer");
+                            return true;
+                        }
+                        else if (tryBuild(RobotType.BUILDER, CommandCommunicator.RobotRole.FARM_BUILDER,farm_location)) {
+                            build_order = (build_order + 1) % 5;
+                            farms[maximum_direction] += 1;
+                            //System.out.println("Building farmer");
+                            return true;
+                        }
+                    }
+                    else {
+                        build_order = (build_order + 1) % 5;
+                    }
+                    return false;
+                default:
+                    System.out.println("Default build order exception.");
+                    build_order = 0;
+                    return build();
+            }
+        }
+    }
+
+
     class DefaultRepair implements RepairStrategy {
         @Override
         public boolean repair() throws GameActionException {
@@ -191,8 +301,6 @@ public class Archon extends RunnableBot {
 
     private boolean tryBuild(RobotType type, Direction dir, CommandCommunicator.RobotRole role, MapLocation loc) throws GameActionException {
 
-        // TODO: Deal with edge case of adjacent archons
-
         if (getRobotController().canBuildRobot(type, dir)) {
             getRobotController().buildRobot(type, dir);
             last_order = new CommandCommunicator.SpawnOrder(
@@ -202,6 +310,21 @@ public class Archon extends RunnableBot {
         }
         return false;
     }
+
+    private boolean tryBuild(RobotType type, CommandCommunicator.RobotRole role, MapLocation loc) throws GameActionException {
+
+        for (Direction dir : Constants.DIRECTIONS) {
+            if (getRobotController().canBuildRobot(type, dir)) {
+                getRobotController().buildRobot(type, dir);
+                last_order = new CommandCommunicator.SpawnOrder(
+                        role,
+                        loc);
+                return true;
+            }
+        }
+        return false;
+    }
+
 
     private boolean tryBuild(RobotType type, Direction dir) throws GameActionException {
         return tryBuild(type,dir,CommandCommunicator.type2Role(type),getRobotController().getLocation().add(dir));
@@ -217,8 +340,9 @@ public class Archon extends RunnableBot {
                 int score = -getRobotController().senseRubble(loc);
                 if (type == RobotType.MINER && Cache.lead_spots.length > 0) {
                     for (MapLocation lead : Cache.lead_spots) {
-                        if (getRobotController().senseLead(lead) > Miner.LEAD_MINE_THRESHOLD) {
-                            score = score -10 * Navigator.travelDistance(loc,lead);
+                        int v = getRobotController().senseLead(lead);
+                        if (v > Miner.LEAD_MINE_THRESHOLD && getRobotController().getLocation().directionTo(lead) == dir) {
+                            score = score - 10 * Navigator.travelDistance(loc,lead) + (v - Miner.LEAD_MINE_THRESHOLD) / 5;
                             break;
                         }
                     }

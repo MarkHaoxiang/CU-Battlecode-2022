@@ -140,13 +140,15 @@ public class Soldier extends RunnableBot
 				else {
 					if (navigator.move(Cache.MY_SPAWN_LOCATION) == Navigator.MoveResult.SUCCESS) return true;
 				}
+
 			}
 			return false;
 		}
 
 		public boolean shouldRun () {
 			RobotController controller = getRobotController();
-			if (controller.getHealth() < HP_THRESHOLD || Cache.can_see_archon && controller.getHealth() < 50) {
+			//if (controller.getHealth() < HP_THRESHOLD || (controller.getHealth() <= Cache.lowest_health_soldier && Cache.can_see_archon)) {
+			if (controller.getHealth() < HP_THRESHOLD) {
 				return true;
 			}
 			return false;
@@ -227,23 +229,16 @@ public class Soldier extends RunnableBot
 
 						int rubble_default, rubble_a, rubble_b, rubble_c;
 						rubble_default = rubble_b = rubble_c = rubble_a = 10000;
-						if (controller.onTheMap(potential_robot_location_a)
-								&& location.isWithinDistanceSquared(potential_robot_location_a,RobotType.SOLDIER.actionRadiusSquared)
-								&& controller.senseRobotAtLocation(potential_robot_location_a) == null) {
+						if (controller.onTheMap(potential_robot_location_a) && location.isWithinDistanceSquared(potential_robot_location_a,RobotType.SOLDIER.actionRadiusSquared)) {
 							rubble_a = controller.senseRubble(potential_robot_location_a);
 						}
-						if (controller.onTheMap(potential_robot_location_b)
-								&& location.isWithinDistanceSquared(potential_robot_location_b,RobotType.SOLDIER.actionRadiusSquared)
-								&& controller.senseRobotAtLocation(potential_robot_location_b) == null) {
+						if (controller.onTheMap(potential_robot_location_b) && location.isWithinDistanceSquared(potential_robot_location_b,RobotType.SOLDIER.actionRadiusSquared)) {
 							rubble_b = controller.senseRubble(potential_robot_location_b);
 						}
-						if (controller.onTheMap(potential_robot_location_c)
-								&& location.isWithinDistanceSquared(potential_robot_location_c,RobotType.SOLDIER.actionRadiusSquared)
-								&& controller.senseRobotAtLocation(potential_robot_location_c) == null) {
+						if (controller.onTheMap(potential_robot_location_c) && location.isWithinDistanceSquared(potential_robot_location_c,RobotType.SOLDIER.actionRadiusSquared)) {
 							rubble_c = controller.senseRubble(potential_robot_location_c);
 						}
 						double expected_damage;
-
 						double damage = robot.getType().damage;
 						double base_cooldown = robot.getType().actionCooldown;
 						if (robot_location.isWithinDistanceSquared(location,robot.getType().actionRadiusSquared)) {
@@ -272,12 +267,8 @@ public class Soldier extends RunnableBot
 						continue;
 					}
 
-					if (Cache.can_see_archon) {
-						expected_damage_from_opponents -= 2.0 / Math.max(Cache.friendly_soldiers.length,5);
-					}
-
 					// Be aggressive, prioritize our own damage
-						score = expected_damage;
+					score = expected_damage;
 					if (controller.isActionReady() && in_range) {
 						if (retreat_moving_strategy.willWeWin() && Cache.friendly_soldiers.length > Cache.opponent_soldiers.length + 1) {
 							score = expected_damage - expected_damage_from_opponents;
@@ -383,7 +374,7 @@ public class Soldier extends RunnableBot
 
 		current_attacking_strategy = default_attacking_strategy;
 
-		if (retreat_moving_strategy.shouldRun() && !Cache.can_see_archon) {
+		if (retreat_moving_strategy.shouldRun()) {
 			current_moving_strategy = retreat_moving_strategy;
 		}
 		else if (Cache.opponent_soldiers.length + Cache.opponent_villagers.length + Cache.opponent_buildings.length > 0) {
