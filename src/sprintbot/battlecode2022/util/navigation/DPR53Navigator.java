@@ -2,7 +2,7 @@ package sprintbot.battlecode2022.util.navigation;
 
 import battlecode.common.*;
 import static battlecode.common.Direction.*;
-import sprintbot.battlecode2022.util.Navigator;
+import sprintbot.battlecode2022.util.*;
 
 public class DPR53Navigator extends Navigator
 {
@@ -137,6 +137,20 @@ public class DPR53Navigator extends Navigator
 				|| tar_loc_x > X_BOUND || tar_loc_y > Y_BOUND)
 			return MoveResult.IMPOSSIBLE;
 		MapLocation current_loc = rc.getLocation();
+		if (current_loc.distanceSquaredTo(target_loc) <= 2
+				&& rc.canSenseLocation(target_loc)) {
+			RobotInfo robot = rc.senseRobotAtLocation(target_loc);
+			if (robot != null
+					&& robot.getTeam() == Cache.OUR_TEAM
+					&& robot.getType() == RobotType.MINER) {
+				return MoveResult.IMPOSSIBLE;
+			}
+			if (robot != null
+					&& robot.getType().isBuilding()
+					&& robot.getMode().canMove == false) {
+				return MoveResult.IMPOSSIBLE;
+			}
+		}
 		int cur_loc_x = current_loc.x;
 		int cur_loc_y = current_loc.y;
 		if (current_loc.equals(target_loc))
@@ -154,7 +168,7 @@ public class DPR53Navigator extends Navigator
 				return MoveResult.SUCCESS;
 			}
 			else
-				return MoveResult.FAIL;
+				return MoveResult.FAIL;				
 		}
 		//System.out.printf("Check Complete, left = 53\n", Clock.getBytecodesLeft());
 		tmp_loc = current_loc.translate(0,0);

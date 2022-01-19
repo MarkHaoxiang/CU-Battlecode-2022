@@ -6,7 +6,7 @@ void printHead(){printf(R"(package sprintbot.battlecode2022.util.navigation;
 
 import battlecode.common.*;
 import static battlecode.common.Direction.*;
-import sprintbot.battlecode2022.util.Navigator;
+import sprintbot.battlecode2022.util.*;
 
 public class DPR)");printf("%d",vision);printf(R"(Navigator extends Navigator
 {
@@ -141,6 +141,20 @@ public class DPR)");printf("%d",vision);printf(R"(Navigator extends Navigator
 				|| tar_loc_x > X_BOUND || tar_loc_y > Y_BOUND)
 			return MoveResult.IMPOSSIBLE;
 		MapLocation current_loc = rc.getLocation();
+		if (current_loc.distanceSquaredTo(target_loc) <= 2
+				&& rc.canSenseLocation(target_loc)) {
+			RobotInfo robot = rc.senseRobotAtLocation(target_loc);
+			if (robot != null
+					&& robot.getTeam() == Cache.OUR_TEAM
+					&& robot.getType() == RobotType.MINER) {
+				return MoveResult.IMPOSSIBLE;
+			}
+			if (robot != null
+					&& robot.getType().isBuilding()
+					&& robot.getMode().canMove == false) {
+				return MoveResult.IMPOSSIBLE;
+			}
+		}
 		int cur_loc_x = current_loc.x;
 		int cur_loc_y = current_loc.y;
 		if (current_loc.equals(target_loc))
@@ -341,8 +355,9 @@ void finalTrace()
 }
 int main()
 {
-	vision = 53;
-	freopen("Code.txt","w",stdout);
+	vision=53;//16 20 34 53
+	string str = "DPR"+to_string(vision)+"Navigator.java";
+	freopen(str.c_str(),"w",stdout);
 	printHead();
 	getNodes();
 	calculateDP();
