@@ -1,5 +1,6 @@
 package sprintbot.battlecode2022.util;
 
+import battlecode.common.Clock;
 import battlecode.common.GameActionException;
 import battlecode.common.MapLocation;
 import battlecode.common.RobotController;
@@ -85,16 +86,12 @@ public class MatrixCommunicator extends Communicator {
 	 * @throws GameActionException -
 	 */
 	public static void read(Event event) throws GameActionException {
-		int event_bit = Communicator.eventNum(event);
 		int[] compressed_locations = new int[NUM_OF_COMPRESSED_LOCATIONS];
 		int cnt = 0;
-		for (int compressed_location = 0; compressed_location < NUM_OF_COMPRESSED_LOCATIONS; compressed_location++) {
-			int bit_id = event_bit + BITS_PER_LOCATION * compressed_location;
-			int id = offset + bit_id / BITS_PER_INTEGER;
-			int value = controller.readSharedArray(id);
-			int relative_bit_id = BITS_PER_INTEGER - bit_id % BITS_PER_INTEGER - 1;
-			int bit = (value >> relative_bit_id) & 1;
-			if (bit == 1) {
+		int bit_id = Communicator.eventNum(event) + BITS_PER_LOCATION * NUM_OF_COMPRESSED_LOCATIONS;
+		for (int compressed_location = NUM_OF_COMPRESSED_LOCATIONS; --compressed_location >= 0;) {
+			bit_id -= BITS_PER_LOCATION;
+			if (((controller.readSharedArray(offset + bit_id / BITS_PER_INTEGER) >> (BITS_PER_INTEGER - bit_id % BITS_PER_INTEGER - 1)) & 1) == 1) {
 				compressed_locations[cnt++] = compressed_location;
 			}
 		}

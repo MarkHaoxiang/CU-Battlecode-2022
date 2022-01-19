@@ -2,6 +2,9 @@ package sprintbot.battlecode2022.util;
 
 import battlecode.common.*;
 
+import java.util.Arrays;
+import java.util.Comparator;
+
 // Data such as turn number, turns alive, local environment etc
 
 public class Cache
@@ -22,7 +25,13 @@ public class Cache
 	public static int[] metal_compressed_locations = new int[64];
 	public static int[] opponent_soldier_compressed_locations = new int[64];
 
+	private static int[][] rubble_map;
+
 	public static MapLocation main_force_target;
+
+	public static AnomalyScheduleEntry ANOMALIES[];
+	public static AnomalyScheduleEntry next_anomaly = null;
+	private static int current_anomaly_index = 0;
 
 	public static int age = 0;
 
@@ -33,7 +42,11 @@ public class Cache
 	public static RobotInfo[] opponent_villagers = null;
 	public static RobotInfo[] opponent_buildings = null;
 
-	public static int opponent_total_damage = 0;
+	public static double opponent_total_damage = 0;
+	public static int opponent_total_health = 0;
+	public static double our_total_damage = 0;
+	public static int our_total_health = 0;
+	public static boolean can_see_archon = false;
 
 	public static MapLocation[] lead_spots = null;
 	public static int lead_amount = 0;
@@ -51,6 +64,12 @@ public class Cache
 		metal_compressed_locations[0] = -1;
 		opponent_soldier_compressed_locations[0] = -1;
 		MY_SPAWN_LOCATION = controller.getLocation();
+		rubble_map = new int[MAP_WIDTH][MAP_HEIGHT];
+		ANOMALIES = controller.getAnomalySchedule();
+		Arrays.sort(ANOMALIES, Comparator.comparingInt(anomalyScheduleEntry -> anomalyScheduleEntry.roundNumber));
+		if (ANOMALIES.length > 0) {
+			next_anomaly = ANOMALIES[0];
+		}
 	}
 
 	// Scouting
@@ -65,22 +84,45 @@ public class Cache
 		unit_scout_routine();
 		unit_lead_routine();
 
+		// Anomaly
+		if (next_anomaly != null && next_anomaly.roundNumber < controller.getRoundNum()) {
+			current_anomaly_index ++;
+			if (current_anomaly_index < ANOMALIES.length) {
+				next_anomaly = ANOMALIES[current_anomaly_index];
+			}
+			else {
+				next_anomaly = null;
+			}
+		}
+
 	}
 
-	private static void unit_scout_routine() throws GameActionException {
+	public static void unit_scout_routine() throws GameActionException {
 
 		RobotInfo[] units = controller.senseNearbyRobots();
 		int fs,fv,fb,os,ov,ob;
 		fs = fv = os = ov = fb = ob = 0;
 
 		// Units
-		opponent_total_damage = 0;
+		opponent_total_damage = 0.0;
+		opponent_total_health = 0;
+		our_total_damage = 0.0;
+		our_total_health = 0;
+		can_see_archon = false;
+
+		if (controller.getType() == RobotType.SOLDIER || controller.getType() == RobotType.SAGE) {
+			our_total_damage += (double)controller.getType().damage / (double)controller.getType().actionCooldown * 10.0;
+			our_total_health += controller.getHealth();
+		}
+
 		for (RobotInfo unit : units) {
 			if (unit.getTeam() == OUR_TEAM) {
 				switch (unit.getType()) {
 					case SOLDIER:
 					case SAGE:
 					case WATCHTOWER:
+						our_total_damage += (double)unit.getType().damage / (double)unit.getType().actionCooldown * 10.0;
+						our_total_health += unit.getHealth();
 						fs ++;
 						break;
 					case MINER:
@@ -88,6 +130,7 @@ public class Cache
 						fv ++;
 						break;
 					case ARCHON:
+						can_see_archon = true;
 					case LABORATORY:
 						fb ++;
 				}
@@ -98,12 +141,14 @@ public class Cache
 					case SOLDIER:
 					case SAGE:
 						os ++;
-						opponent_total_damage += unit.getType().damage;
+						opponent_total_damage +=(double)unit.getType().damage / (double)unit.getType().actionCooldown * 10.0;
+						opponent_total_health += unit.getHealth();
 						break;
 					case WATCHTOWER:
 						os ++;
 						if (unit.mode == RobotMode.TURRET) {
-							opponent_total_damage += unit.getType().damage;
+							opponent_total_damage += (double)unit.getType().damage / (double)unit.getType().actionCooldown * 10.0;
+							opponent_total_health += unit.getHealth();
 						}
 						break;
 					case MINER:
@@ -224,6 +269,5 @@ public class Cache
 				break;
 		}
 	}
-
 
 }

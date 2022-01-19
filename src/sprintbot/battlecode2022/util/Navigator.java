@@ -57,7 +57,7 @@ public abstract class Navigator {
 
     public boolean inMap(MapLocation location) {
         if (location == null) return false;
-        return location.x < MAP_WIDTH && location.y < MAP_HEIGHT;
+        return location.x >= 0 && location.y >= 0 && location.x < MAP_WIDTH && location.y < MAP_HEIGHT;
     }
 
     public static Integer travelDistance(MapLocation from,
@@ -84,21 +84,7 @@ public abstract class Navigator {
      * @throws GameActionException
      */
     public MapLocation[] adjacentLocationWithCenter(MapLocation location) throws GameActionException {
-        int n = 0;
-        for (Direction dir : Direction.allDirections()) {
-            if (inMap(location.add(dir))) {
-                n ++;
-            }
-        }
-        MapLocation[] res = new MapLocation[n];
-        n = 0;
-        for (Direction dir : Direction.allDirections()) {
-            if (inMap(location.add(dir))) {
-                res[n] = location.add(dir);
-                n ++;
-            }
-        }
-        return res;
+        return controller.getAllLocationsWithinRadiusSquared(location,2);
     }
 
 }

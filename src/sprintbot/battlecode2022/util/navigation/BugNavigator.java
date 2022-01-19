@@ -30,9 +30,10 @@ public class BugNavigator extends Navigator {
     public MoveResult move(MapLocation target_location)
             throws GameActionException {
 
-
         MapLocation current_location = controller.getLocation();
 
+
+        /*
         // Is target out of the map
         if (target_location == null ||
                 !controller.onTheMap(current_location.add(
@@ -62,14 +63,15 @@ public class BugNavigator extends Navigator {
             }
         }
 
-        if (Constants.DEBUG) {
-            controller.setIndicatorLine(current_location,target_location,255,255,0);
-        }
+
 
 
         // Is it ready
         if (controller.getMovementCooldownTurns() > 0)
             return MoveResult.FAIL;
+
+        */
+
 
         // Target change, stop bugging
         if (target_location != prev_target) {
