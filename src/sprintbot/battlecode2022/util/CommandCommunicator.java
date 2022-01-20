@@ -140,7 +140,8 @@ public class CommandCommunicator extends Communicator {
             RobotRole.SAGE,
             RobotRole.FARM_BUILDER,
             RobotRole.F,
-            RobotRole.G
+            RobotRole.G,
+            RobotRole.H
     };
 
     public static RobotRole type2Role (RobotType type) {
