@@ -89,13 +89,16 @@ public class Soldier extends RunnableBot
 
 			switch (move_result) {
 				case SUCCESS:
+					getRobotController().setIndicatorString("SUCCESS");
 					return true;
 				case REACHED:
 					// Nothing here, go somewhere else
 					MatrixCommunicator.update(Communicator.Event.SOLDIER,my_location,false);
 					MatrixCommunicator.update(Communicator.Event.ARCHON,my_location,false);
+					move_target = null;
 					return false;
 				case IMPOSSIBLE:
+					getRobotController().setIndicatorString("IMPOSSIBLE");
 					if (Navigator.travelDistance(my_location,move_target) <= 4) {
 						MatrixCommunicator.update(Communicator.Event.SOLDIER,move_target,false);
 					}
@@ -106,6 +109,7 @@ public class Soldier extends RunnableBot
 					};
 					return false;
 				case FAIL:
+					getRobotController().setIndicatorString("FAIL");
 				default:
 					return false;
 			}
@@ -219,16 +223,18 @@ public class Soldier extends RunnableBot
 					boolean in_range = false;
 					boolean in_vision = false;
 					for (RobotInfo robot : Cache.opponent_soldiers) {
-
+						//int start = Clock.getBytecodeNum();
 						MapLocation robot_location = robot.getLocation();
 						in_vision = robot_location.isWithinDistanceSquared(location,RobotType.SOLDIER.visionRadiusSquared);
 
+						/*
 						MapLocation potential_robot_location_a = robot_location.add(robot_location.directionTo(location));
 						MapLocation potential_robot_location_b = robot_location.add(robot_location.directionTo(location).rotateLeft());
 						MapLocation potential_robot_location_c = robot_location.add(robot_location.directionTo(location).rotateRight());
-
+						*/
 						int rubble_default, rubble_a, rubble_b, rubble_c;
 						rubble_default = rubble_b = rubble_c = rubble_a = 10000;
+						/*
 						if (controller.onTheMap(potential_robot_location_a) && location.isWithinDistanceSquared(potential_robot_location_a,RobotType.SOLDIER.actionRadiusSquared)) {
 							rubble_a = controller.senseRubble(potential_robot_location_a);
 						}
@@ -238,21 +244,18 @@ public class Soldier extends RunnableBot
 						if (controller.onTheMap(potential_robot_location_c) && location.isWithinDistanceSquared(potential_robot_location_c,RobotType.SOLDIER.actionRadiusSquared)) {
 							rubble_c = controller.senseRubble(potential_robot_location_c);
 						}
-						double expected_damage;
-						double damage = robot.getType().damage;
-						double base_cooldown = robot.getType().actionCooldown;
+						 */
 						if (robot_location.isWithinDistanceSquared(location,robot.getType().actionRadiusSquared)) {
 							rubble_default = controller.senseRubble(robot_location);
-							expected_damage = damage / ((1.0+rubble_default/10.0) * base_cooldown / 10.0);
-							expected_damage_from_opponents += expected_damage;
+							expected_damage_from_opponents += robot.getType().damage / ((1.0+rubble_default/10.0) * robot.getType().actionCooldown / 10.0);
 						}
 
-						double min_rubble = Math.min(Math.min(rubble_c,Math.min(rubble_a,rubble_b)),rubble_default);
-						if (min_rubble < 1000) expected_damage_from_opponents_move += damage / ((1.0+ min_rubble /10.0) * base_cooldown / 10.0);
-
+						//double min_rubble = Math.min(Math.min(rubble_c,Math.min(rubble_a,rubble_b)),rubble_default);
+						//if (min_rubble < 1000) expected_damage_from_opponents_move += robot.getType().damage / ((1.0+ min_rubble /10.0) * robot.getType().actionCooldown / 10.0);
 						if (robot_location.isWithinDistanceSquared(location,RobotType.SOLDIER.actionRadiusSquared)) {
 							in_range = true;
 						}
+						//System.out.println(Clock.getBytecodeNum()-start);
 					}
 
 					expected_damage_from_opponents = expected_damage_from_opponents / (double)(Cache.friendly_soldiers.length + 1);
@@ -376,9 +379,11 @@ public class Soldier extends RunnableBot
 
 		if (retreat_moving_strategy.shouldRun()) {
 			current_moving_strategy = retreat_moving_strategy;
+			getRobotController().setIndicatorString("Run");
 		}
 		else if (Cache.opponent_soldiers.length + Cache.opponent_villagers.length + Cache.opponent_buildings.length > 0) {
 			current_moving_strategy = fight_moving_strategy;
+			getRobotController().setIndicatorString("Fight");
 		}
 		else {
 			if ((Cache.age & 1) == 1) {
@@ -387,6 +392,7 @@ public class Soldier extends RunnableBot
 			else {
 				MatrixCommunicator.read(Communicator.Event.SOLDIER);
 			}
+			getRobotController().setIndicatorString("Search");
 			current_moving_strategy = search_moving_strategy;
 		}
 

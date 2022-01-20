@@ -203,7 +203,6 @@ public class CommandCommunicator extends Communicator {
             System.out.println("Who wrote a bug? getSpawnRole A");
             return new SpawnOrder(type2Role(controller.getType()),controller.getLocation());
         }
-        // Distance 1 first before 2 to account for edge case of two nearby archons
         for (Direction dir : new Direction[] {Direction.NORTH, Direction.EAST,
                 Direction.SOUTH, Direction.WEST,
                 Direction.NORTHEAST, Direction.SOUTHEAST,

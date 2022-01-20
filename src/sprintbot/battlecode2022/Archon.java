@@ -14,9 +14,14 @@ public class Archon extends RunnableBot {
     private final FarmBuild farm_strategy = new FarmBuild();
     private final PeacefulBuild peaceful_strategy = new PeacefulBuild();
 
+    // Relocate Strategy
+    private final ShortRangeRelocate short_range_relocate = new ShortRangeRelocate();
+
     // Archon only
     public static int team_total_miners = 0;
     public static int team_total_soldiers = 0;
+
+    MapLocation start_location = null;
 
     private int FARM_TRANSITION_DISTANCE = 8;
 
@@ -31,6 +36,7 @@ public class Archon extends RunnableBot {
     public void init() throws GameActionException {
         super.init();
         CommandCommunicator.archonIDShare();
+        start_location = getRobotController().getLocation();
     }
 
     @Override
@@ -56,6 +62,11 @@ public class Archon extends RunnableBot {
         RepairStrategy current_repair_strategy = repair_strategy;
 
         controller.setIndicatorString(Integer.toString(team_total_miners));
+
+        // Relocate
+        if (short_range_relocate.shouldRelocate()) {
+            short_range_relocate.relocate();
+        }
 
         // Early game build
         if (Cache.opponent_archon_compressed_locations[0] == -1
@@ -89,6 +100,11 @@ public class Archon extends RunnableBot {
 
     interface BuildStrategy {
         boolean build() throws GameActionException;
+    }
+
+    interface RelocateStrategy {
+        boolean relocate() throws GameActionException;
+        boolean shouldRelocate() throws GameActionException;
     }
 
     class PeacefulBuild implements BuildStrategy {
@@ -271,7 +287,6 @@ public class Archon extends RunnableBot {
         }
     }
 
-
     class DefaultRepair implements RepairStrategy {
         @Override
         public boolean repair() throws GameActionException {
@@ -294,6 +309,89 @@ public class Archon extends RunnableBot {
             }
 
             return false;
+        }
+    }
+
+    class ShortRangeRelocate implements RelocateStrategy {
+
+        MapLocation relocate_target = null;
+        RobotController controller = getRobotController();
+
+        @Override
+        public boolean shouldRelocate() throws GameActionException {
+            MapLocation my_location = controller.getLocation();
+            if (controller.getMode() == RobotMode.PORTABLE) {
+                return true;
+            }
+            double current_score = calculateScore(my_location);
+            double max_score = -20000;
+            MapLocation best = null;
+            for (MapLocation potential : controller.getAllLocationsWithinRadiusSquared(my_location,5)) {
+                double v = calculateScore(potential);
+                if (v > max_score) {
+                    max_score = v;
+                    best = potential;
+                }
+            };
+            if (current_score / 2 < max_score && controller.canTransform()) {
+                relocate_target = best;
+                return true;
+            }
+
+            relocate_target = null;
+            return false;
+        }
+
+        private double calculateScore (MapLocation location) throws GameActionException {
+            for (RobotInfo building : Cache.friendly_buildings) {
+                if (building.getType() == RobotType.ARCHON
+                        && building.getLocation().distanceSquaredTo(location) <= 8
+                        && building.getMode() == RobotMode.TURRET) {
+                    return -10000;
+                }
+            }
+            double score = 0;
+            if (Cache.opponent_soldiers.length > 0 || controller.getRoundNum() < 20 && location != controller.getLocation()) {
+                score -= 1000; // Probably shouldn't move
+            }
+            score = score - controller.senseRubble(location)-10;
+            score = score - controller.getLocation().distanceSquaredTo(location) * 0.1;
+            if (!location.equals(getRobotController().getLocation()) && controller.isLocationOccupied(location)) {
+                score -= 100;
+            }
+            return score;
+        }
+
+        @Override
+        public boolean relocate() throws GameActionException {
+
+            controller.setIndicatorLine(controller.getLocation(),relocate_target,100,100,100);
+            // Move
+            if (! (controller.getMode() == RobotMode.PORTABLE)) {
+                if (controller.canTransform()) {
+                    controller.transform();
+                    return true;
+                }
+                return false;
+            }
+
+            // Already there
+
+            if (controller.getLocation().equals(relocate_target)) {
+                if (controller.canTransform()) {
+                    controller.transform();
+                    return true;
+                }
+                return false;
+            }
+            // Move towards
+            Navigator.MoveResult move_result = navigator.move(relocate_target);
+            switch (move_result) {
+                case SUCCESS:
+                    return true;
+                default:
+                    return false;
+            }
         }
     }
 
@@ -324,7 +422,6 @@ public class Archon extends RunnableBot {
         }
         return false;
     }
-
 
     private boolean tryBuild(RobotType type, Direction dir) throws GameActionException {
         return tryBuild(type,dir,CommandCommunicator.type2Role(type),getRobotController().getLocation().add(dir));
