@@ -89,6 +89,8 @@ public class CommandCommunicator extends Communicator {
         return new int[] {friends % 10};
     }
 
+    public static final int BANK_INDEX = 3;
+    public static final int LAB_INDEX = 4;
     public static final int SOLDIER_INDEX = 5;
     public static final int IDLE_FARMER_INDEX = 6;
     public static final int INCOME_INDEX = 7;
@@ -97,7 +99,7 @@ public class CommandCommunicator extends Communicator {
     /* Global Data Schema
     *  2 - Build order
     *  3 - Desired bank
-    *  4 - To build lab number
+    *  4 - Lab number
     *  5 - Soldier number
     *  6 - Idle farmer number
     *  7 - Income

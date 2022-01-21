@@ -80,7 +80,6 @@ public class Cache
 		age += 1;
 
 		// Scouting routine
-		turn_report_reset = false;
 		unit_scout_routine();
 		unit_lead_routine();
 
@@ -98,6 +97,8 @@ public class Cache
 	}
 
 	public static void unit_scout_routine() throws GameActionException {
+
+		turn_report_reset = false;
 
 		RobotInfo[] units = controller.senseNearbyRobots();
 		int fs,fv,fb,os,ov,ob;
@@ -230,6 +231,7 @@ public class Cache
 
 		//int start_bytecode = Clock.getBytecodeNum();
 		int REPORT_LEAD_THRESHOLD = Math.min(150,Communicator.X_STEP * Communicator.Y_STEP * 10);
+		boolean has_report = false;
 
 		lead_amount = 0;
 		int[] has_lead = new int[Communicator.NUM_OF_COMPRESSED_LOCATIONS];
@@ -247,6 +249,9 @@ public class Cache
 
 			if (l > 1) {
 				has_lead[Communicator.compressLocation(spot)] += l - 1;
+				if (has_lead[Communicator.compressLocation(spot)] >= REPORT_LEAD_THRESHOLD) {
+					has_report = true;
+				}
 			}
 
 			/* Old lead communication framework - all lead spots count. Depreciated.
@@ -258,9 +263,9 @@ public class Cache
 			has_lead[compressed] = 1;
 			 */
 		}
-		/*
+
 		MapLocation my_location = controller.getLocation();
-		if (lead_amount > REPORT_LEAD_THRESHOLD) {
+		if (has_report) {
 			System.out.println(my_location);
 			int vision_range = (int)Math.sqrt(controller.getType().visionRadiusSquared);
 			for (int x = Math.max(0,my_location.x - vision_range); x < Math.min(MAP_WIDTH-1,my_location.x + vision_range); x += Communicator.X_STEP) {
@@ -277,7 +282,6 @@ public class Cache
 			MatrixCommunicator.update(Communicator.Event.METAL,my_compressed,false);
 		}
 
-		 */
 	}
 
 

@@ -4,6 +4,7 @@ import battlecode.common.*;
 import sprintbot.RunnableBot;
 import sprintbot.battlecode2022.util.*;
 
+import java.awt.*;
 import java.util.Random;
 
 public class Archon extends RunnableBot {
@@ -175,12 +176,13 @@ public class Archon extends RunnableBot {
         @Override
         public boolean build() throws GameActionException {
 
-            int team_lead = getRobotController().getTeamLeadAmount(Cache.OUR_TEAM);
+            RobotController controller = getRobotController();
+            int team_lead = controller.getTeamLeadAmount(Cache.OUR_TEAM);
             if (team_lead < 40) { //Can't build anything, don't waste bytecode
                 return false;
             }
             int my_archon_id = CommandCommunicator.getMyID();
-            int team_build_order = getRobotController().readSharedArray(TEAM_BUILD_ORDER_INDEX) % 5;
+            int team_build_order = controller.readSharedArray(TEAM_BUILD_ORDER_INDEX) % 5;
             MapLocation[] team_spawn_locations = CommandCommunicator.getSpawnLocations();
             int[] distanceToClosestSoldier = new int[team_spawn_locations.length];
             double[] distanceToClosestSoldierAdjusted = new double[team_spawn_locations.length];
@@ -207,6 +209,31 @@ public class Archon extends RunnableBot {
                 else {
                     distanceToClosestSoldier[i] = 9999;
                     distanceToClosestSoldierAdjusted[i] = 0;
+                }
+            }
+
+
+            // Lab strategy
+            // TODO: Maintain minimum distance
+            int lab = controller.readSharedArray(CommandCommunicator.LAB_INDEX);
+
+            if (smoothed_income - lab * 15 > 10 && soldier_number > 15 && farmer_number > 10 && team_lead >= 40) {
+                MapLocation my_location = controller.getLocation();
+                MapLocation closest = null;
+                for (MapLocation loc : new MapLocation[] {
+                        new MapLocation(0, my_location.y),
+                        new MapLocation(Cache.MAP_WIDTH-1, my_location.y),
+                        new MapLocation(my_location.x, Cache.MAP_WIDTH-1),
+                        new MapLocation(my_location.x, 0),
+                }) {
+                    if (closest == null || closest.distanceSquaredTo(my_location) > loc.distanceSquaredTo(my_location)) {
+                        closest = loc;
+                    }
+                }
+
+                if (tryBuild(RobotType.BUILDER, CommandCommunicator.RobotRole.LAB_BUILDER,closest)) {
+                    controller.writeSharedArray(CommandCommunicator.LAB_INDEX,lab+1);
+                    controller.writeSharedArray(CommandCommunicator.BANK_INDEX,  controller.readSharedArray(CommandCommunicator.BANK_INDEX)+180);
                 }
             }
 
@@ -242,8 +269,7 @@ public class Archon extends RunnableBot {
                     break;
                 case 1:
                 case 2:
-                case 4: // Solder
-                    // TODO: Use softmax instead?
+                case 4: // Soldier
                     double c = 0;
                     if (totalDistance == 0) {
                         // Equal distribution
@@ -512,6 +538,13 @@ public class Archon extends RunnableBot {
     }
 
     private boolean tryBuild(RobotType type, Direction dir, CommandCommunicator.RobotRole role, MapLocation loc) throws GameActionException {
+
+        int save = getRobotController().readSharedArray(CommandCommunicator.BANK_INDEX);
+        int money = getRobotController().getTeamLeadAmount(Cache.OUR_TEAM) - save;
+
+        if (money < type.buildCostLead) {
+            return false;
+        }
 
         if (getRobotController().canBuildRobot(type, dir)) {
             getRobotController().buildRobot(type, dir);

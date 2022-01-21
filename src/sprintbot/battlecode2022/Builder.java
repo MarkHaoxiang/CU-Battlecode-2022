@@ -15,6 +15,7 @@ public class Builder extends RunnableBot
 
     private FarmMoveStrategy farm_move_strategy = new FarmMoveStrategy();
     private FightMoveStrategy fight_move_strategy = new FightMoveStrategy();
+    private LabMoveStrategy lab_move_strategy = new LabMoveStrategy();
     private RepairStrategy repair_strategy = new DefaultRepairStrategy();
 
     enum BuilderState {
@@ -49,6 +50,7 @@ public class Builder extends RunnableBot
                 break;
             case LAB_BUILDER:
                 state = BuilderState.BUILDING;
+                lab_move_strategy = new LabMoveStrategy();
                 break;
             default:
                 state = BuilderState.FIGHTING;
@@ -65,6 +67,9 @@ public class Builder extends RunnableBot
 
         if (state == BuilderState.FARMING) {
             move_strategy = farm_move_strategy;
+        }
+        else if (state == BuilderState.BUILDING) {
+            move_strategy = lab_move_strategy;
         }
         else {
             move_strategy = fight_move_strategy;
@@ -95,7 +100,8 @@ public class Builder extends RunnableBot
 
         RobotController controller = getRobotController();
         private boolean has_reached_assigned = false;
-        private MapLocation lowest_rubble = null;
+        private MapLocation best_location = null;
+        private boolean has_built = false;
 
         public LabMoveStrategy() {
 
@@ -134,13 +140,53 @@ public class Builder extends RunnableBot
             }
 
             int lowest_rubble = 9999;
-            for (MapLocation location : controller.getAllLocationsWithinRadiusSquared(controller.getLocation(),8)) {
-                if (controller.onTheMap(location) && controller.senseRubble(location) < lowest_rubble) {
-                    lowest_rubble = controller.senseRubble(location);
+
+            if (best_location == null) {
+                for (MapLocation location : controller.getAllLocationsWithinRadiusSquared(controller.getLocation(),8)) {
+                    int penalty = controller.senseRubble(location) + (controller.isLocationOccupied(location) ? 1 : 0) * 10 + Math.max(controller.getLocation().x,controller.getLocation().y);
+                    if (controller.onTheMap(location) && penalty < lowest_rubble) {
+                        lowest_rubble = penalty;
+                        best_location = location;
+                    }
                 }
             }
-            return false;
 
+            if (controller.getLocation().distanceSquaredTo(best_location) > 2) {
+                if (navigator.move(assigned_location) == Navigator.MoveResult.SUCCESS) {
+                    return true;
+                }
+                return false;
+            }
+
+            if (controller.getLocation().equals(best_location)) {
+                for (Direction dir : Constants.DIRECTIONS) {
+                    if (navigator.move(getRobotController().getLocation().add(dir)) == Navigator.MoveResult.SUCCESS) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            if (!has_built) {
+                if (controller.canBuildRobot(RobotType.LABORATORY,controller.getLocation().directionTo(best_location))) {
+                    controller.buildRobot(RobotType.LABORATORY,controller.getLocation().directionTo(best_location));
+                    int v = controller.readSharedArray(CommandCommunicator.BANK_INDEX);
+                    controller.writeSharedArray(CommandCommunicator.BANK_INDEX,v-180);
+                    has_built = true;
+                }
+            }
+            //TODO: Just improve fight strategy enough so this isn't needed
+            else {
+                for (RobotInfo robot : Cache.friendly_buildings) {
+                    if (robot.getType() == RobotType.LABORATORY
+                            && robot.getLocation().isWithinDistanceSquared(getRobotController().getLocation(),2)
+                            && robot.getHealth() < RobotType.LABORATORY.health) {
+                        return false;
+                    }
+                }
+                state = BuilderState.FIGHTING;
+            }
+            return false;
         }
     }
 
@@ -256,7 +302,7 @@ public class Builder extends RunnableBot
 
             for (RobotInfo robot : Cache.friendly_buildings) {
                 if (robot.getHealth() < robot.getType().health && controller.canRepair(robot.getLocation())) {
-                    controller.setIndicatorLine(controller.getLocation(),robot.getLocation(),0,255,0);
+                    //controller.setIndicatorLine(controller.getLocation(),robot.getLocation(),0,255,0);
                     controller.repair(robot.getLocation());
                     return true;
                 }
