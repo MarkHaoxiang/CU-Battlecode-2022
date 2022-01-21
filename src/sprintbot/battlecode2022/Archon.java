@@ -4,7 +4,6 @@ import battlecode.common.*;
 import sprintbot.RunnableBot;
 import sprintbot.battlecode2022.util.*;
 
-import java.util.Arrays;
 import java.util.Random;
 
 public class Archon extends RunnableBot {
@@ -506,7 +505,7 @@ public class Archon extends RunnableBot {
             // System.out.println(soldier_number);
             //System.out.println(idle_farmer_number);
             // System.out.println(farmer_number);
-            for (int i = 5; i<=8; i ++) {
+            for (int i = 5; i<=10; i ++) {
                 getRobotController().writeSharedArray(i,0);
             }
         }

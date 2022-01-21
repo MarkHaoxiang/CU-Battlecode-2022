@@ -8,6 +8,8 @@ public class IntegratedNavigator extends Navigator
 	private Navigator dpNavigator;
 	private int dpBytecodeCostUpperBound;
 	private final BugNavigator bugNavigator = new BugNavigator(controller);
+	private final BugNavigatorLimit bugNavigatorLimit = new BugNavigatorLimit(controller,45);
+	private boolean isRestricted = false;
 	private Navigator currentNavigator = null;
 	private int stuckTurns;
 
@@ -15,6 +17,14 @@ public class IntegratedNavigator extends Navigator
 	public IntegratedNavigator(RobotController controller)
 	{
 		super(controller);
+
+
+		// Should we bug nav
+		if (controller.getType() == RobotType.SOLDIER
+				//&& controller.getRoundNum() % 6 >= 2
+		) {
+			isRestricted = true;
+		}
 
 		switch (controller.getType().visionRadiusSquared)
 
@@ -38,7 +48,7 @@ public class IntegratedNavigator extends Navigator
 		}
 	}
 
-	private void pickNavigator(MapLocation target_location) throws GameActionException
+	private void pickNavigator(MapLocation target_location, boolean overrideLimit) throws GameActionException
 	{
 		/*
 			Bytecode Costs:
@@ -46,6 +56,12 @@ public class IntegratedNavigator extends Navigator
 			bug:500
 			When stuck, try using bug navigator instead
 		*/
+
+		if (!overrideLimit && isRestricted) {
+			currentNavigator = bugNavigatorLimit;
+			return;
+		}
+
 
 		//  DP Naivgator doesn't work well when robots nearby
 		MapLocation my_location = controller.getLocation();
@@ -69,11 +85,16 @@ public class IntegratedNavigator extends Navigator
 	}
 
 	@Override
-	public MoveResult move(MapLocation target_location) throws GameActionException
+	public MoveResult move(MapLocation target_location) throws GameActionException {
+		return move(target_location,false);
+	}
+
+	public MoveResult move(MapLocation target_location, boolean overrideLimit) throws GameActionException
 	{
 
 		MapLocation current_location = controller.getLocation();
 
+		controller.setIndicatorLine(current_location,target_location,200,105,125);
 		// Is target out of the map
 		if (target_location == null ||
 				!controller.onTheMap(current_location.add(
@@ -102,22 +123,20 @@ public class IntegratedNavigator extends Navigator
 			}
 		}
 
-
 		// Is it ready
 		if (!controller.isMovementReady())
 			return MoveResult.FAIL;
 
-		if (Constants.DEBUG) {
-			controller.setIndicatorLine(controller.getLocation(),target_location,255,255,0);
-		}
-
-		pickNavigator(target_location);
+		pickNavigator(target_location, overrideLimit);
 
 		//if (Constants.DEBUG)
 		//	System.out.printf("Before Navigation: [Bytecode left: %d, Using %s]\n", Clock.getBytecodesLeft(), currentNavigator.getClass());
 		MoveResult move_result = currentNavigator.move(target_location);
 		//if (Constants.DEBUG)
 		//	System.out.printf("After Navigation: [Bytecode left: %d, Move result: %s]\n", Clock.getBytecodesLeft(), move_result);
+		if (bugNavigatorLimit.getStuckTurns() > 0) {
+			isRestricted = false;
+		}
 		switch (move_result)
 		{
 			case SUCCESS:

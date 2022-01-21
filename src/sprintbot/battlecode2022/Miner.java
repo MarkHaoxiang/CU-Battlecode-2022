@@ -30,7 +30,7 @@ public class Miner extends RunnableBot
 	};
 
 	protected MinerState state = MinerState.SEARCHING;
-	public static final int LEAD_MINE_THRESHOLD = 1; // Do not mine if <= 1
+	public static int LEAD_MINE_THRESHOLD = 1; // Do not mine if <= 1
 	
 	public Miner(RobotController rc) throws GameActionException
 	{
@@ -50,7 +50,21 @@ public class Miner extends RunnableBot
 	@Override
 	public void turn() throws GameActionException
 	{
+
 		Cache.update();
+
+		/*
+		if (Navigator.travelDistance(Cache.MY_SPAWN_LOCATION, getRobotController().getLocation()) >= 8 &&
+				(Cache.opponent_soldiers.length > Cache.friendly_soldiers.length
+				|| Cache.friendly_soldiers.length == 0 && Cache.opponent_buildings.length > 0)
+		) {
+			LEAD_MINE_THRESHOLD = 0;
+		}
+		else {
+			LEAD_MINE_THRESHOLD = 1;
+		}
+		*/
+
 
 		// Update info for archons
 		income = 0;
@@ -185,8 +199,21 @@ public class Miner extends RunnableBot
 			}
 			if (move_target == null) {
 				move_target = navigator.randomLocation();
+				/*
+				int tries = 0;
+				while (MatrixCommunicator.read(Communicator.Event.FRIENDLY_MINER,move_target) && tries < 5) {
+					move_target = navigator.randomLocation();
+					tries += 1;
+				}
+				 */
 			}
-			Navigator.MoveResult move_result = navigator.move(move_target);
+
+			int distance = move_target.distanceSquaredTo(my_location);
+			Navigator.MoveResult move_result = Navigator.MoveResult.REACHED;
+			if (closest == null || distance > 2 || distance < 2 && getRobotController().senseRubble(move_target) < getRobotController().senseRubble(my_location)) {
+				move_result = navigator.move(move_target);
+			}
+
 			switch (move_result) {
 				case FAIL:
 					return false;
@@ -271,12 +298,12 @@ public class Miner extends RunnableBot
 			}
 
 
-			int mine_potential = 0;
+			//int mine_potential = 0;
 			if (mine_locations.length > 0) {
 				for (MapLocation lead_spot : mine_locations) {
 					if (!getRobotController().canSenseLocation(lead_spot)) continue;
  					int lead_amount = getRobotController().senseLead(lead_spot);
-					mine_potential += lead_amount;
+					//mine_potential += lead_amount;
 					if (lead_amount <= LEAD_MINE_THRESHOLD) {
 						// Not enough lead
 						continue;
@@ -333,7 +360,9 @@ public class Miner extends RunnableBot
 			RobotController controller = getRobotController();
 			if (Cache.opponent_soldiers.length > Cache.friendly_soldiers.length
 					|| controller.getHealth() < HP_THRESHOLD
-					|| Cache.opponent_total_damage > controller.getHealth()) {
+					|| Cache.opponent_total_damage > controller.getHealth()
+					|| Cache.lead_amount < 20 && Cache.opponent_soldiers.length > 0
+			) {
 				return true;
 			}
 			return false;
@@ -341,6 +370,7 @@ public class Miner extends RunnableBot
 
 		@Override
 		public boolean move() throws GameActionException {
+			search_moving_strategy.move_target = null;
 			RobotController controller = getRobotController();
 			Direction direction = null;
 			Integer closest = Integer.MAX_VALUE;
@@ -355,7 +385,6 @@ public class Miner extends RunnableBot
 						closest = distance;
 						direction = controller.getLocation().directionTo(robot.getLocation()).opposite();
 					}
-
 				}
 				*/
 				if (Cache.injured >= 3 && Cache.can_see_archon && controller.senseLead(controller.getLocation()) == 0) {
@@ -383,7 +412,7 @@ public class Miner extends RunnableBot
 			return false;
 		}
 	}
-	
+
 	class DefaultMineStrategy implements MineStrategy
 	{
 		@Override
@@ -401,9 +430,7 @@ public class Miner extends RunnableBot
 						Cache.controller.mineGold(mineLocation);
 					while (Cache.controller.canMineLead(mineLocation)
 							&& ((Cache.controller.senseLead(mineLocation) > LEAD_MINE_THRESHOLD)
-							|| (Cache.controller.senseLead(mineLocation) > 0
-								&& Cache.opponent_soldiers.length > Cache.friendly_soldiers.length
-								&& 8 < Navigator.travelDistance(getRobotController().getLocation(),Cache.MY_SPAWN_LOCATION)))) {
+							|| (Cache.controller.senseLead(mineLocation) > 0 && Cache.opponent_soldiers.length > Cache.friendly_soldiers.length + 1))) {
 						Cache.controller.mineLead(mineLocation);
 						income += 1;
 					}

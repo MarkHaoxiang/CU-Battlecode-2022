@@ -18,7 +18,10 @@ public class Laboratory extends RunnableBot {
     @Override
     public void turn() throws GameActionException {
 
-        Cache.update();
+        if (getRobotController().canTransmute()) {
+            getRobotController().transmute();
+        }
+        Cache.unit_scout_routine();
 
     }
 }

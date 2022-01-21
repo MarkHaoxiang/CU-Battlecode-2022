@@ -78,7 +78,6 @@ public strictfp class RobotPlayer
 				// world. Remember, uncaught exceptions cause your robot to explode!
 				System.out.println(rc.getType() + " Exception");
 				//e.printStackTrace();
-				
 			} catch (Exception e)
 			{
 				// Oh no! It looks like our code tried to do something bad. This isn't a

@@ -47,6 +47,7 @@ public class Cache
 	public static boolean can_see_archon = false;
 	public static int lowest_health_soldier = 50;
 	public static int injured = 0;
+	public static MapLocation archon_location = null;
 
 	public static MapLocation[] lead_spots = null;
 	public static int lead_amount = 0;
@@ -110,6 +111,7 @@ public class Cache
 		can_see_archon = false;
 		lowest_health_soldier = 0;
 		injured = 0;
+		archon_location = null;
 
 		if (controller.getType() == RobotType.SOLDIER || controller.getType() == RobotType.SAGE) {
 			our_total_damage += (double)controller.getType().damage / (double)controller.getType().actionCooldown * 10.0;
@@ -138,6 +140,9 @@ public class Cache
 						break;
 					case ARCHON:
 						can_see_archon = true;
+						if (archon_location == null || unit.getLocation().distanceSquaredTo(controller.getLocation())<archon_location.distanceSquaredTo(controller.getLocation())) {
+							archon_location = unit.getLocation();
+						}
 					case LABORATORY:
 						fb ++;
 				}
@@ -220,21 +225,59 @@ public class Cache
 		}
 	}
 
+
 	private static void unit_lead_routine() throws GameActionException {
+
+		//int start_bytecode = Clock.getBytecodeNum();
+		int REPORT_LEAD_THRESHOLD = Math.min(150,Communicator.X_STEP * Communicator.Y_STEP * 10);
 
 		lead_amount = 0;
 		int[] has_lead = new int[Communicator.NUM_OF_COMPRESSED_LOCATIONS];
 		lead_spots = controller.senseNearbyLocationsWithLead(MY_VISION_RADIUS);
 
-		for (MapLocation spot : lead_spots) {
-			lead_amount += controller.senseLead(spot);
+		for (int i = lead_spots.length; --i >= 0;) {
+			MapLocation spot = lead_spots[i];
+			int l = controller.senseLead(spot);
+			lead_amount += l;
+
+			/*
+			New framework - communicate only when spot has a large amount of lead to call for help
+			 */
+
+
+			if (l > 1) {
+				has_lead[Communicator.compressLocation(spot)] += l - 1;
+			}
+
+			/* Old lead communication framework - all lead spots count. Depreciated.
 			int compressed = Communicator.compressLocation(spot);
 			if (has_lead[compressed] != 0) {
 				continue;
 			}
 			MatrixCommunicator.update(Communicator.Event.METAL,spot);
 			has_lead[compressed] = 1;
+			 */
 		}
+		/*
+		MapLocation my_location = controller.getLocation();
+		if (lead_amount > REPORT_LEAD_THRESHOLD) {
+			System.out.println(my_location);
+			int vision_range = (int)Math.sqrt(controller.getType().visionRadiusSquared);
+			for (int x = Math.max(0,my_location.x - vision_range); x < Math.min(MAP_WIDTH-1,my_location.x + vision_range); x += Communicator.X_STEP) {
+				for (int y = Math.max(my_location.y - vision_range,0); y < Math.min(MAP_HEIGHT-1,my_location.y + vision_range); y += Communicator.Y_STEP) {
+					int i = Communicator.compressLocation(new MapLocation(x,y));
+					if (has_lead[i] >= REPORT_LEAD_THRESHOLD) {
+						MatrixCommunicator.update(Communicator.Event.METAL,i,true);
+					}
+				}
+			}
+		}
+		int my_compressed = Communicator.compressLocation(my_location);
+		if (has_lead[my_compressed] < REPORT_LEAD_THRESHOLD) {
+			MatrixCommunicator.update(Communicator.Event.METAL,my_compressed,false);
+		}
+
+		 */
 	}
 
 

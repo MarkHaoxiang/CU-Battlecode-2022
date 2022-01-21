@@ -19,7 +19,8 @@ public class Builder extends RunnableBot
 
     enum BuilderState {
         FIGHTING,
-        FARMING
+        FARMING,
+        BUILDING
     };
 
     BuilderState state;
@@ -45,6 +46,9 @@ public class Builder extends RunnableBot
         switch (assigned_role) {
             case FARM_BUILDER:
                 state = BuilderState.FARMING;
+                break;
+            case LAB_BUILDER:
+                state = BuilderState.BUILDING;
                 break;
             default:
                 state = BuilderState.FIGHTING;
@@ -85,6 +89,59 @@ public class Builder extends RunnableBot
     interface RepairStrategy
     {
         boolean repair() throws GameActionException;
+    }
+
+    class LabMoveStrategy implements MoveStrategy {
+
+        RobotController controller = getRobotController();
+        private boolean has_reached_assigned = false;
+        private MapLocation lowest_rubble = null;
+
+        public LabMoveStrategy() {
+
+            if (assigned_location == null) {
+                // Nearest edge you go
+                MapLocation my_location = controller.getLocation();
+                MapLocation closest = null;
+                for (MapLocation loc : new MapLocation[] {
+                        new MapLocation(0, my_location.y),
+                        new MapLocation(Cache.MAP_WIDTH-1, my_location.y),
+                        new MapLocation(my_location.x, Cache.MAP_WIDTH-1),
+                        new MapLocation(my_location.x, 0),
+                }) {
+                    if (closest == null || closest.distanceSquaredTo(my_location) > loc.distanceSquaredTo(my_location)) {
+                        closest = loc;
+                    }
+                }
+                assigned_location = closest;
+            }
+
+        }
+
+        @Override
+        public boolean move() throws GameActionException {
+
+
+            if (controller.getLocation().distanceSquaredTo(assigned_location) <= 4) {
+                has_reached_assigned = true;
+            }
+
+            if (!has_reached_assigned) {
+                if (navigator.move(assigned_location) == Navigator.MoveResult.SUCCESS) {
+                    return true;
+                }
+                return false;
+            }
+
+            int lowest_rubble = 9999;
+            for (MapLocation location : controller.getAllLocationsWithinRadiusSquared(controller.getLocation(),8)) {
+                if (controller.onTheMap(location) && controller.senseRubble(location) < lowest_rubble) {
+                    lowest_rubble = controller.senseRubble(location);
+                }
+            }
+            return false;
+
+        }
     }
 
     class FightMoveStrategy implements MoveStrategy {

@@ -96,12 +96,15 @@ public class CommandCommunicator extends Communicator {
 
     /* Global Data Schema
     *  2 - Build order
-    *  3 - Unused
-    *  4 - Unused
+    *  3 - Desired bank
+    *  4 - To build lab number
     *  5 - Soldier number
     *  6 - Idle farmer number
     *  7 - Income
     *  8 - Total farmer number
+    *  9 - Sage number
+    *  10 - Watch tower number
+    *
     * */
 
     // TODO: Implement Priority Schema
@@ -139,7 +142,7 @@ public class CommandCommunicator extends Communicator {
         FIGHT_BUILDER(2),
         SAGE(3),
         FARM_BUILDER(4),
-        F(5),
+        LAB_BUILDER(5),
         G(6),
         H(7);
         public final int id;
@@ -154,7 +157,7 @@ public class CommandCommunicator extends Communicator {
             RobotRole.FIGHT_BUILDER,
             RobotRole.SAGE,
             RobotRole.FARM_BUILDER,
-            RobotRole.F,
+            RobotRole.LAB_BUILDER,
             RobotRole.G,
             RobotRole.H
     };
