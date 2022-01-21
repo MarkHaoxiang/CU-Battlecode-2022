@@ -266,7 +266,7 @@ public class Cache
 
 		MapLocation my_location = controller.getLocation();
 		if (has_report) {
-			System.out.println(my_location);
+			//System.out.println(my_location);
 			int vision_range = (int)Math.sqrt(controller.getType().visionRadiusSquared);
 			for (int x = Math.max(0,my_location.x - vision_range); x < Math.min(MAP_WIDTH-1,my_location.x + vision_range); x += Communicator.X_STEP) {
 				for (int y = Math.max(my_location.y - vision_range,0); y < Math.min(MAP_HEIGHT-1,my_location.y + vision_range); y += Communicator.Y_STEP) {

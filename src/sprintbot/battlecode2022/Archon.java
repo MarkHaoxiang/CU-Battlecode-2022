@@ -259,35 +259,59 @@ public class Archon extends RunnableBot {
 
             switch (team_build_order) {
                 case 0: // Miner, anyone can build tbh
-                    if(buildMiner(my_ranking, team_build_order)) {
-                        return true;
+                    if (getRobotController().getRoundNum() % getRobotController().getArchonCount() == my_ranking ||
+                            CommandCommunicator.isLastArchon()) {
+                        if (tryBuild(RobotType.MINER)) {
+                            getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
+                            return true;
+                        }
                     }
                     break;
                 case 1:
                 case 2:
                 case 4: // Soldier
                     double c = 0;
-                    double d = 1.0; // total Distance == 0: Equal distribution
-                    for (int i = 0; i < distanceToClosestSoldier.length; i ++) {
-                        if (totalDistance != 0) {
-                            d = distanceToClosestSoldierAdjusted[i];
-                        }
-                        c += d / (double)distanceToClosestSoldier.length;
-                        if (rand < c) {
-                            if (i == my_archon_id && tryBuild(RobotType.SOLDIER)) {
-                                getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
-                                debug_tot_soldier += 1;
-                                return true;
+                    if (totalDistance == 0) {
+                        // Equal distribution
+                        for (int i = 0; i < distanceToClosestSoldier.length; i ++) {
+                            c += 1.0 / (double)distanceToClosestSoldier.length;
+                            if (rand < c) {
+                                if (i == my_archon_id && tryBuild(RobotType.SOLDIER)) {
+                                    getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
+                                    debug_tot_soldier += 1;
+                                    return true;
+                                }
+                                return false;
                             }
-                            return false;
+                        }
+                    }
+                    else {
+                        for (int i = 0; i < distanceToClosestSoldier.length; i ++) {
+                            c += distanceToClosestSoldierAdjusted[i] / totalAdjustedDistance;
+                            if (rand < c) {
+                                if (i == my_archon_id && tryBuild(RobotType.SOLDIER)) {
+                                    getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
+                                    debug_tot_soldier += 1;
+                                    return true;
+                                }
+                                return false;
+                            }
                         }
                     }
                     break;
                 case 3: // Farmer or miner
 
                     if (farmer_number < Math.min(soldier_number/2,10) || distanceToClosestSoldier[my_archon_id] <= 8) {
-                        return buildMiner(my_ranking, team_build_order);
+                        if (getRobotController().getRoundNum() % getRobotController().getArchonCount() == my_ranking ||
+                                CommandCommunicator.isLastArchon()) {
+                            if (tryBuild(RobotType.MINER)) {
+                                getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
+                                return true;
+                            }
+                        }
+                        return false;
                     }
+
 
                     if (distanceToClosestSoldier[my_archon_id] < 8) {
                         if (maxDistance < 8) {
@@ -324,7 +348,13 @@ public class Archon extends RunnableBot {
                         if (maximum_score > -9999) {
                             Direction dir = Navigator.intToDirection(maximum_direction);
                             MapLocation farm_location = my_location.add(dir).add(dir).add(dir);
-                            if (tryBuild(RobotType.BUILDER,dir, CommandCommunicator.RobotRole.FARM_BUILDER,farm_location) || tryBuild(RobotType.BUILDER, CommandCommunicator.RobotRole.FARM_BUILDER,farm_location)) {
+                            if (tryBuild(RobotType.BUILDER,dir, CommandCommunicator.RobotRole.FARM_BUILDER,farm_location)) {
+                                getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
+                                farms[maximum_direction] += 1;
+                                //System.out.println("Building farmer");
+                                return true;
+                            }
+                            else if (tryBuild(RobotType.BUILDER, CommandCommunicator.RobotRole.FARM_BUILDER,farm_location)) {
                                 getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
                                 farms[maximum_direction] += 1;
                                 //System.out.println("Building farmer");
@@ -339,17 +369,6 @@ public class Archon extends RunnableBot {
                     return false;
                 default:
                     System.out.println("BUGGGGG Spawn");
-            }
-            return false;
-        }
-
-        private boolean buildMiner(int my_ranking, int team_build_order) throws GameActionException {
-            if (getRobotController().getRoundNum() % getRobotController().getArchonCount() == my_ranking ||
-                    CommandCommunicator.isLastArchon()) {
-                if (tryBuild(RobotType.MINER)) {
-                    getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
-                    return true;
-                }
             }
             return false;
         }

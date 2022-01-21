@@ -62,6 +62,10 @@ public class IntegratedNavigator extends Navigator
 			return;
 		}
 
+		if (overrideLimit) {
+			bugNavigatorLimit.bugReset();
+		}
+
 
 		//  DP Naivgator doesn't work well when robots nearby
 		MapLocation my_location = controller.getLocation();
@@ -127,6 +131,9 @@ public class IntegratedNavigator extends Navigator
 		if (!controller.isMovementReady())
 			return MoveResult.FAIL;
 
+		if (Constants.DEBUG) {
+			controller.setIndicatorString("Movement ready");
+		}
 		pickNavigator(target_location, overrideLimit);
 
 		//if (Constants.DEBUG)

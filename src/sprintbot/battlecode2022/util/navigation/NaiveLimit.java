@@ -31,4 +31,5 @@ public class NaiveLimit extends Navigator {
         }
         return MoveResult.FAIL;
     }
+
 }

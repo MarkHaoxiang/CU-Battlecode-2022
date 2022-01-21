@@ -15,7 +15,7 @@ public class BugNavigatorLimit extends Navigator {
     private MapLocation prev_target;
     private MapLocation start_bug_location;
     private MapLocation obstacle;
-    private double gradient;
+    private double angle;
     private int stuck_turns;
 
     private final int rubble_limit;
@@ -41,46 +41,15 @@ public class BugNavigatorLimit extends Navigator {
         return stuck_turns;
     }
 
+    public void bugReset() {
+        is_bugging = false;
+    }
+
     // Bug Pathing
     public MoveResult move(MapLocation target_location)
             throws GameActionException {
 
-
         MapLocation current_location = controller.getLocation();
-        //controller.setIndicatorLine(current_location,target_location,0,0,0);
-
-        /*
-        // Is target out of the map
-        if (target_location == null ||
-                !controller.onTheMap(current_location.add(
-                        current_location.directionTo(
-                                target_location)))) return MoveResult.IMPOSSIBLE;
-
-        // At destination
-        if (target_location.equals(current_location)) {
-            return MoveResult.REACHED;
-        }
-
-        // Our miners have priority, don't disturb them
-        // Buildings are walls
-        if (current_location.distanceSquaredTo(target_location) <= 2
-                && controller.canSenseLocation(target_location)) {
-            RobotInfo robot = controller.senseRobotAtLocation(target_location);
-            if (robot != null
-                    && robot.getTeam() == Cache.OUR_TEAM
-                    && robot.getType() == RobotType.MINER) {
-                return MoveResult.IMPOSSIBLE;
-            }
-            if (robot != null
-                    && robot.getType().isBuilding()
-                    && robot.getMode().canMove == false) {
-                return MoveResult.IMPOSSIBLE;
-            }
-        }
-
-         */
-
-        //controller.setIndicatorString(Boolean.toString(clockwise));
 
         if (controller.canSenseLocation(target_location) && controller.senseRubble(target_location) >= rubble_limit) {
             return MoveResult.IMPOSSIBLE;
@@ -101,12 +70,16 @@ public class BugNavigatorLimit extends Navigator {
             }
             // Stuck, start bugging
             is_bugging = true;
-            //clockwise = start_clockwise;
+            clockwise = start_clockwise;
             count = 0;
             start_bug_location = current_location;
+            angle = calculateAngle(current_location,target_location);
+            /*
             gradient =
                     calculateGradient(current_location,
                             target_location);
+             */
+            //System.out.println(gradient);
             obstacle =
                     controller.adjacentLocation(
                             current_location.directionTo(
@@ -117,12 +90,16 @@ public class BugNavigatorLimit extends Navigator {
             //controller.setIndicatorString("Bugging");
             // Robot trapped
 
+            controller.setIndicatorString(start_bug_location.toString());
+
             if (start_bug_location.equals(current_location)) {
                 count += 1;
                 if (count >= 3) {
+                    stuck_turns += 1;
                     return MoveResult.FAIL;
                 }
             }
+
 
             Direction
                     obstacleDirection =
@@ -130,12 +107,16 @@ public class BugNavigatorLimit extends Navigator {
                             obstacle);
             Direction target_direction = obstacleDirection;
             // Edge Case: Obstacle gone
+
+            controller.setIndicatorString(obstacle.toString());
+            //System.out.println(obstacle);
             if (naive.move(obstacleDirection) == MoveResult.SUCCESS) {
                 controller.setIndicatorString("B");
                 is_bugging = false;
                 clockwise = start_clockwise;
                 return MoveResult.SUCCESS;
             }
+
             if (clockwise) {
                 target_direction =
                         target_direction.rotateRight();
@@ -143,7 +124,10 @@ public class BugNavigatorLimit extends Navigator {
                 target_direction =
                         target_direction.rotateLeft();
             }
-            while (naive.move(target_direction) != MoveResult.SUCCESS) {
+            //MapLocation start_loc = controller.getLocation();
+            while ((controller.canSenseLocation(controller.getLocation().add(target_direction)) && controller.senseRubble(controller.getLocation().add(target_direction)) >= rubble_limit)
+                    || !controller.canMove(target_direction)) {
+
                 if (clockwise) {
                     target_direction =
                             target_direction.rotateRight();
@@ -151,6 +135,7 @@ public class BugNavigatorLimit extends Navigator {
                     target_direction =
                             target_direction.rotateLeft();
                 }
+
                 //If on the edge of the map, switch bug directions
                 //Or, there is no way past
                 if (!controller.onTheMap(controller.adjacentLocation(
@@ -169,6 +154,8 @@ public class BugNavigatorLimit extends Navigator {
                     return MoveResult.FAIL;
                 }
             }
+
+
             if (clockwise) {
                 obstacle =
                         controller.adjacentLocation(
@@ -178,41 +165,103 @@ public class BugNavigatorLimit extends Navigator {
                         controller.adjacentLocation(
                                 target_direction.rotateRight());
             }
+
+
             MapLocation
                     moveLoc =
                     controller.adjacentLocation(
                             target_direction);
+
             //Check if it's passing the original line closer to the target
             if (current_location.distanceSquaredTo(
                     target_location) <
                     start_bug_location.distanceSquaredTo(
                             target_location)) {
-                if (calculateGradient(current_location,
-                        target_location) > gradient &&
-                        calculateGradient(moveLoc,
-                                target_location) <= gradient) {
-                    controller.setIndicatorString("C");
-                    is_bugging = false;
-                    clockwise = start_clockwise;
-                } else if (calculateGradient(moveLoc,
-                        target_location) >= gradient) {
-                    controller.setIndicatorString("D");
+                double angle_a = calculateAngle(current_location,target_location);
+                double angle_b = calculateAngle(moveLoc,target_location);
+                double a = (angle - angle_a + 2*Math.PI) % Math.PI;
+                double b =  (angle - angle_b + 2*Math.PI) % Math.PI;
+                if (a<Math.PI && b > Math.PI || a > Math.PI && b < Math.PI) {
+                    //controller.setIndicatorString(String.valueOf(a));
+                    //controller.setIndicatorString(String.valueOf(b));
                     is_bugging = false;
                     clockwise = start_clockwise;
                 }
-            }
+                /*
+                if (start_clockwise) {
+                    if (calculateGradient(current_location, target_location) > gradient
+                            && calculateGradient(moveLoc, target_location) <= gradient
+                            && sameSign(calculateGradient(current_location, target_location),calculateGradient(moveLoc, target_location))) {
+                        controller.setIndicatorString("C");
+                        is_bugging = false;
+                        clockwise = start_clockwise;
+                    } else if (!clockwise && calculateGradient(moveLoc,
+                            target_location) >= gradient) {
+                        controller.setIndicatorString("D");
+                        is_bugging = false;
+                        clockwise = start_clockwise;
+                    }
+                }
+                else {
+                    if (calculateGradient(current_location,
+                            target_location) < gradient
+                            &&  calculateGradient(moveLoc, target_location) >= gradient
+                            && sameSign(calculateGradient(moveLoc, target_location),calculateGradient(current_location,
+                            target_location))) {
+                        controller.setIndicatorString("E");
+                        System.out.println(gradient);
+                        System.out.println(calculateGradient(current_location,
+                                target_location));
+                        System.out.println(calculateGradient(moveLoc,
+                                target_location));
+                        is_bugging = false;
+                        clockwise = start_clockwise;
+                    } else if (clockwise && calculateGradient(moveLoc,
+                            target_location) <= gradient) {
+                        controller.setIndicatorString("F");
+                        is_bugging = false;
+                        clockwise = start_clockwise;
+                    }
+                }
 
+                 */
+
+            }
             return naive.move(target_direction);
         }
     }
 
     // Util
 
+    private static boolean sameSign(double x, double y) {
+        return ((x<0) == (y<0));
+    }
+
+    private static double calculateAngle (MapLocation start, MapLocation end) {
+        double x = end.x-start.x;
+        double y = end.y-start.y;
+
+        // Edge cases
+        if (x > 0 && y == 0) {
+            return 0.0;
+        }
+        if (x < 0 && y == 0) {
+            return  Math.PI;
+        }
+        double angle = Math.atan(x/y);
+        if (x>0) {
+            return angle;
+        }
+        return angle + Math.PI;
+    }
+
     private static double calculateGradient(
             MapLocation start, MapLocation end) {
-        if (start == null || end == null) return -2;
+        if (start == null || end == null) {
+            System.out.println("Who did this. BugNav bug");
+        }
         if (end.x - start.x == 0) {
-            return -1;
+            return -10000;
         }
         //Rise over run
         return 1.0 * (end.y - start.y) / (end.x - start.x);

@@ -74,7 +74,7 @@ public class BugNavigator extends Navigator {
 
 
         // Target change, stop bugging
-        if (target_location != prev_target) {
+        if (!target_location.equals(prev_target)) {
             is_bugging = false;
         }
         prev_target = target_location;
@@ -188,7 +188,7 @@ public class BugNavigator extends Navigator {
             MapLocation start, MapLocation end) {
         if (start == null || end == null) return -2;
         if (end.x - start.x == 0) {
-            return -1;
+            return -1000;
         }
         //Rise over run
         return 1.0 * (end.y - start.y) / (end.x - start.x);

@@ -1,6 +1,9 @@
 package sprintbot.battlecode2022;
 
 import battlecode.common.*;
+import sprintbot.battlecode2022.util.Cache;
+import sprintbot.battlecode2022.util.Communicator;
+import sprintbot.battlecode2022.util.Navigator;
 import sprintbot.RunnableBot;
 import sprintbot.battlecode2022.util.*;
 
@@ -123,6 +126,8 @@ public class Miner extends RunnableBot
 		/* Number of turns to give up moving if repeatedly stuck
 		   Note that it is necessary because it might get surrounded by robots
 		   It is also probably related to bytecode limit, but we don't account for that now */
+		private boolean is_random = false;
+		private int SHARE_THRESHOLD;
 
 		public SearchMoveStrategy () {
 
@@ -134,6 +139,7 @@ public class Miner extends RunnableBot
 			}
 			else if (move_target == null) {
 				move_target = navigator.randomLocation();
+				is_random = true;
 			}
 		}
 
@@ -198,20 +204,7 @@ public class Miner extends RunnableBot
 				}
 			}
 			if (move_target == null) {
-				// read large METAL spots
-				MatrixCommunicator.read(Communicator.Event.METAL);
-				int min_dist = 9999;
-				for (int i = 0; i < Cache.metal_compressed_locations.length; i++) {
-					if (Cache.metal_compressed_locations[i] == -1) {
-						break;
-					}
-					MapLocation target = MatrixCommunicator.unzipCompressedLocation(Cache.metal_compressed_locations[i]);
-					int dist = Navigator.travelDistance(my_location, target);
-					if (dist < min_dist) {
-						min_dist = dist;
-						move_target = target;
-					}
-				}
+
 				if (move_target == null) {
 					move_target = navigator.randomLocation();
 				}
