@@ -2,6 +2,7 @@ package sprintbot;
 
 import battlecode.common.*;
 import sprintbot.battlecode2022.*;
+import sprintbot.battlecode2022.util.Constants;
 
 /**
  * RobotPlayer is the class that describes your main robot strategy.
@@ -54,6 +55,14 @@ public strictfp class RobotPlayer
 		
 		while (true)
 		{
+
+
+
+			if (controller.getRoundNum() == 500) {
+				controller.resign();
+			}
+
+
 			// This code runs during the entire lifespan of the robot, which is why it is in an infinite
 			// loop. If we ever leave this loop and return from run(), the robot dies! At the end of the
 			// loop, we call Clock.yield(), signifying that we've done everything we want to do.
@@ -76,8 +85,9 @@ public strictfp class RobotPlayer
 				// GameActionException, so it's more likely to be a bug in our code.
 				System.out.println(rc.getType() + " Exception");
 				e.printStackTrace();
-				controller.resign();
-				
+				if (Constants.DEBUG) {
+					controller.resign();
+				}
 			} finally
 			{
 				// Signify we've done everything we want to do, thereby ending our turn.

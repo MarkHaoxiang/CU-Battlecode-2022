@@ -21,6 +21,8 @@ public class Miner extends RunnableBot
 	private final DefaultMineStrategy default_mining_strategy = new DefaultMineStrategy();
 	private final RunStrategy run_strategy = new RunStrategy();
 
+	int income = 0;
+
 	enum MinerState {
 		SEARCHING,
 		MINING,
@@ -28,7 +30,7 @@ public class Miner extends RunnableBot
 	};
 
 	protected MinerState state = MinerState.SEARCHING;
-	public static final int LEAD_MINE_THRESHOLD = 2; // Do not mine if <= 2
+	public static final int LEAD_MINE_THRESHOLD = 1; // Do not mine if <= 1
 	
 	public Miner(RobotController rc) throws GameActionException
 	{
@@ -50,6 +52,11 @@ public class Miner extends RunnableBot
 	{
 		Cache.update();
 
+		// Update info for archons
+		income = 0;
+		getRobotController().writeSharedArray(CommandCommunicator.TOTAL_FARMER_INDEX,
+				getRobotController().readSharedArray(CommandCommunicator.TOTAL_FARMER_INDEX)+1);
+
 		// Local variables save bytecode -> save to Cache saves more?
 		current_mining_strategy = default_mining_strategy;
 		current_mining_strategy.mine();
@@ -68,7 +75,16 @@ public class Miner extends RunnableBot
 			getRobotController().setIndicatorString(current_moving_strategy.toString());
 		}
 
+		if (state == MinerState.SEARCHING) {
+			getRobotController().writeSharedArray(CommandCommunicator.IDLE_FARMER_INDEX,
+					getRobotController().readSharedArray(CommandCommunicator.IDLE_FARMER_INDEX)+1);
+		}
+
 		current_moving_strategy.move();
+
+		getRobotController().writeSharedArray(CommandCommunicator.INCOME_INDEX,
+				getRobotController().readSharedArray(CommandCommunicator.INCOME_INDEX)+income);
+
 	}
 	
 	// Strategy
@@ -190,6 +206,9 @@ public class Miner extends RunnableBot
 									&& MatrixCommunicator.read(Communicator.Event.FRIENDLY_MINER,robot.getLocation())) {
 								return true;
 							}
+						}
+						if (Cache.lead_spots.length <= 4) {
+							return true;
 						}
 						state = MinerState.MINING;
 						current_moving_strategy.close();
@@ -328,9 +347,6 @@ public class Miner extends RunnableBot
 			if (should_run()) {
 				state = MinerState.RUNNING;
 
-				//TODO: Where should we run to? Base archon? Closest archon? Can we send archon locations?
-				// Away from opponent doesn't work well
-
 				/*
 				for (RobotInfo robot : Cache.opponent_soldiers) {
 					int attack_radius = robot.getType().actionRadiusSquared;
@@ -342,7 +358,12 @@ public class Miner extends RunnableBot
 
 				}
 				*/
+				if (Cache.injured >= 3 && Cache.can_see_archon && controller.senseLead(controller.getLocation()) == 0) {
+					controller.disintegrate();
+					return true;
+				}
 				if (navigator.move(Cache.MY_SPAWN_LOCATION) == Navigator.MoveResult.SUCCESS) return true;
+
 			}
 
 			/*
@@ -378,8 +399,13 @@ public class Miner extends RunnableBot
 					// You can mine multiple times per turn!
 					while (Cache.controller.canMineGold(mineLocation))
 						Cache.controller.mineGold(mineLocation);
-					while (Cache.controller.canMineLead(mineLocation) && Cache.controller.senseLead(mineLocation) > LEAD_MINE_THRESHOLD) {
+					while (Cache.controller.canMineLead(mineLocation)
+							&& ((Cache.controller.senseLead(mineLocation) > LEAD_MINE_THRESHOLD)
+							|| (Cache.controller.senseLead(mineLocation) > 0
+								&& Cache.opponent_soldiers.length > Cache.friendly_soldiers.length
+								&& 8 < Navigator.travelDistance(getRobotController().getLocation(),Cache.MY_SPAWN_LOCATION)))) {
 						Cache.controller.mineLead(mineLocation);
+						income += 1;
 					}
 				}
 			return true;

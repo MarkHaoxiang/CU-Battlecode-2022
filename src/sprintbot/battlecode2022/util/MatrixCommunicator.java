@@ -8,8 +8,8 @@ import battlecode.common.RobotController;
 public class MatrixCommunicator extends Communicator {
 	
 	/* Unit Schema
-	 * Starts 7th integer in shared memory.
-	 * 11 bits boolean array per compressed location.
+	 * Starts 24th integer in shared memory.
+	 * 8 bits boolean array per compressed location.
 	 *
 	 * 0 - 0: Opponent Archon
 	 * 1 - 1: Metal exists
@@ -18,8 +18,11 @@ public class MatrixCommunicator extends Communicator {
 	 *
 	 * */
 	
-	private static final int offset = 6 ;
-	private static final int BITS_PER_LOCATION = 11; // Every location has 11 bits to store states
+	private static final int offset = 23;
+	private static final int BITS_PER_LOCATION = 8;
+	// Every location has 8 bits to store states
+	// Note - commented out code is to deal with bits per location if not 8. Setting as 8 leads to bytecode savings!
+	// Try to keep to 8 if possible
 	// Can be expanded to store fewer states but more options
 	
 	
@@ -86,8 +89,11 @@ public class MatrixCommunicator extends Communicator {
 	 * @throws GameActionException -
 	 */
 	public static void read(Event event) throws GameActionException {
+
 		int[] compressed_locations = new int[NUM_OF_COMPRESSED_LOCATIONS];
 		int cnt = 0;
+
+
 		int bit_id = Communicator.eventNum(event) + BITS_PER_LOCATION * NUM_OF_COMPRESSED_LOCATIONS;
 		for (int compressed_location = NUM_OF_COMPRESSED_LOCATIONS; --compressed_location >= 0;) {
 			bit_id -= BITS_PER_LOCATION;
@@ -95,6 +101,25 @@ public class MatrixCommunicator extends Communicator {
 				compressed_locations[cnt++] = compressed_location;
 			}
 		}
+
+
+		// This only works when 8 bits per location.
+
+		/*
+		int event_bit = Communicator.eventNum(event);
+		int first = 15 - event_bit;
+		int second = 7 - event_bit;
+		for (int id = offset + (NUM_OF_COMPRESSED_LOCATIONS-1) / 2 + 1; --id >= offset;) {
+			if (((controller.readSharedArray(id) >> first) & 1) == 1) {
+				compressed_locations[cnt++] = (id-offset) * 2;
+			}
+			if (((controller.readSharedArray(id) >> second) & 1) == 1) {
+				compressed_locations[cnt++] = (id-offset) * 2 + 1;
+			}
+		}
+		*/
+
+
 		if (cnt < NUM_OF_COMPRESSED_LOCATIONS) {
 			compressed_locations[cnt] = -1; // mark the end
 		}

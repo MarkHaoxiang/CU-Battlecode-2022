@@ -1,5 +1,6 @@
 package sprintbot.battlecode2022.util;
 
+import battlecode.common.Clock;
 import battlecode.common.GameActionException;
 import battlecode.common.MapLocation;
 import battlecode.common.RobotController;
@@ -82,16 +83,6 @@ public class Communicator {
 		return cache_array;
 	}
 
-	public static void update(Event event, MapLocation location) throws GameActionException {
-		switch (Cache.controller.getRoundNum() % 5) {
-			case 0:
-			case 1:
-			case 2:
-			case 3:
-			case 4:
-		}
-	}
-
 	/**
 	 * Compresses a MapLocation to a number between 0~63 (x-major order).
 	 *
@@ -99,14 +90,7 @@ public class Communicator {
 	 * @return compressed location
 	 */
 	public static int compressLocation(MapLocation loc) {
-		int x = loc.x;
-		int y = loc.y;
-		if (x / X_STEP + (y / Y_STEP) * COMPRESSED_SIZE < 0) {
-			System.out.println("Compress location bug. We should really just throw exceptions instead of printing");
-			System.out.println(x);
-			System.out.println(y);
-		}
-		return x / X_STEP + (y / Y_STEP) * COMPRESSED_SIZE;
+		return loc.x / X_STEP + (loc.y / Y_STEP) * COMPRESSED_SIZE;
 	}
 
 	/**
@@ -117,9 +101,7 @@ public class Communicator {
 	 * @return the MapLocation object of that centre
 	 */
 	public static MapLocation unzipCompressedLocation(int compressed_loc) {
-		int x = compressed_loc % COMPRESSED_SIZE * X_STEP + CENTRE_X;
-		int y = compressed_loc / COMPRESSED_SIZE * Y_STEP + CENTRE_Y;
-		return new MapLocation(x, y);
+		return new MapLocation(compressed_loc % COMPRESSED_SIZE * X_STEP + CENTRE_X, compressed_loc / COMPRESSED_SIZE * Y_STEP + CENTRE_Y);
 	}
 
 	/**
@@ -143,26 +125,6 @@ public class Communicator {
 			}
 		}
 		return best_location;
-	}
-
-	/*
-	 * First 6 bits of the 2nd integer: main force target compressed location
-	 * */
-
-	public static void updateMainForceTarget(MapLocation location) throws GameActionException {
-		int compressed_location = compressLocation(location);
-		updateMainForceTarget(compressed_location);
-	}
-
-	public static void updateMainForceTarget(int compressed_location) throws GameActionException {
-		int value = compressed_location << 9;
-		controller.writeSharedArray(1, value);
-	}
-
-	public static void readMainForceTarget() throws GameActionException {
-		int value = controller.readSharedArray(1);
-		int compressed_location = value >> 9;
-		Cache.main_force_target = unzipCompressedLocation(compressed_location);
 	}
 
 }

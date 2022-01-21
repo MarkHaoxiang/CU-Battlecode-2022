@@ -25,8 +25,6 @@ public class Cache
 	public static int[] metal_compressed_locations = new int[64];
 	public static int[] opponent_soldier_compressed_locations = new int[64];
 
-	private static int[][] rubble_map;
-
 	public static MapLocation main_force_target;
 
 	public static AnomalyScheduleEntry ANOMALIES[];
@@ -48,6 +46,7 @@ public class Cache
 	public static int our_total_health = 0;
 	public static boolean can_see_archon = false;
 	public static int lowest_health_soldier = 50;
+	public static int injured = 0;
 
 	public static MapLocation[] lead_spots = null;
 	public static int lead_amount = 0;
@@ -65,9 +64,8 @@ public class Cache
 		metal_compressed_locations[0] = -1;
 		opponent_soldier_compressed_locations[0] = -1;
 		MY_SPAWN_LOCATION = controller.getLocation();
-		rubble_map = new int[MAP_WIDTH][MAP_HEIGHT];
 		ANOMALIES = controller.getAnomalySchedule();
-		Arrays.sort(ANOMALIES, Comparator.comparingInt(anomalyScheduleEntry -> anomalyScheduleEntry.roundNumber));
+		//Arrays.sort(ANOMALIES, Comparator.comparingInt(anomalyScheduleEntry -> anomalyScheduleEntry.roundNumber));
 		if (ANOMALIES.length > 0) {
 			next_anomaly = ANOMALIES[0];
 		}
@@ -111,6 +109,7 @@ public class Cache
 		our_total_health = 0;
 		can_see_archon = false;
 		lowest_health_soldier = 0;
+		injured = 0;
 
 		if (controller.getType() == RobotType.SOLDIER || controller.getType() == RobotType.SAGE) {
 			our_total_damage += (double)controller.getType().damage / (double)controller.getType().actionCooldown * 10.0;
@@ -125,6 +124,9 @@ public class Cache
 					case WATCHTOWER:
 						our_total_damage += (double)unit.getType().damage / (double)unit.getType().actionCooldown * 10.0;
 						our_total_health += unit.getHealth();
+						if (unit.getHealth() < unit.getType().health) {
+							injured += 1;
+						}
 						if (unit.getHealth() < lowest_health_soldier) {
 							lowest_health_soldier = unit.getHealth();
 						}

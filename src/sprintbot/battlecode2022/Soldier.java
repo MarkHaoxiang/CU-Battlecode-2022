@@ -47,11 +47,14 @@ public class Soldier extends RunnableBot
 		private MapLocation move_target;
 		private boolean is_random = false;
 		private final int GIVE_UP_THRESHOLD_TURN = 1;
-		private final int IGNORE_SOLDIER_THRESHOLD = 16;
+		private final int IGNORE_SOLDIER_THRESHOLD = 60;
 
 		@Override
 		public boolean move() throws GameActionException
 		{
+
+			getRobotController().writeSharedArray(CommandCommunicator.SOLDIER_INDEX,
+					getRobotController().readSharedArray(CommandCommunicator.SOLDIER_INDEX)+1);
 
 			// Go for nearby soldiers first
 			MapLocation my_location = getRobotController().getLocation();
@@ -59,7 +62,6 @@ public class Soldier extends RunnableBot
 					Cache.controller.getLocation());
 
 			if (potential_target != null
-					&& Navigator.travelDistance(my_location,potential_target) <= IGNORE_SOLDIER_THRESHOLD
 					&& potential_target != my_location) {
 				move_target = potential_target;
 				is_random = false;
@@ -142,17 +144,39 @@ public class Soldier extends RunnableBot
 					return true;
 				}
 				else {
+					if (Cache.can_see_archon) {
+						for (RobotInfo robot : Cache.friendly_buildings) {
+							if (robot.getType() == RobotType.ARCHON && robot.getLocation().isWithinDistanceSquared(controller.getLocation(),8)) {
+								return false;
+							}
+						}
+					}
 					if (navigator.move(Cache.MY_SPAWN_LOCATION) == Navigator.MoveResult.SUCCESS) return true;
 				}
-
 			}
 			return false;
 		}
 
 		public boolean shouldRun () {
-			RobotController controller = getRobotController();
-			//if (controller.getHealth() < HP_THRESHOLD || (controller.getHealth() <= Cache.lowest_health_soldier && Cache.can_see_archon)) {
-			if (controller.getHealth() < HP_THRESHOLD) {
+
+			int health = getRobotController().getHealth();
+			if (health == RobotType.SOLDIER.health) {
+				return false;
+			}
+			if (!Cache.can_see_archon) {
+				RobotController controller = getRobotController();
+				//if (controller.getHealth() < HP_THRESHOLD || (controller.getHealth() <= Cache.lowest_health_soldier && Cache.can_see_archon)) {
+				if (health < HP_THRESHOLD) {
+					return true;
+				}
+			}
+			else {
+				if (Cache.opponent_soldiers.length > 0 && (getRobotController().getHealth() > HP_THRESHOLD || willWeWin())) {
+					return false;
+				}
+				if (health > 20 && Cache.injured > 3) {
+					return false;
+				}
 				return true;
 			}
 			return false;
@@ -162,7 +186,7 @@ public class Soldier extends RunnableBot
 			if (Cache.opponent_soldiers.length == 0) {
 				return true;
 			}
-			if (Cache.our_total_health / Cache.opponent_total_damage * 1.1 >= Cache.opponent_total_health / Cache.our_total_damage) {
+			if (Cache.our_total_health / Cache.opponent_total_damage >= Cache.opponent_total_health / Cache.our_total_damage * 1.2) {
 				return true;
 			}
 			return false;
@@ -197,9 +221,11 @@ public class Soldier extends RunnableBot
 				}
 				else if (Cache.opponent_villagers.length > 0) {
 					move_target = Cache.opponent_villagers[0].getLocation();
-					Navigator.MoveResult move_result = navigator.move(move_target);
-					if (move_result == Navigator.MoveResult.SUCCESS) {
-						return true;
+					if (move_target.distanceSquaredTo(my_location) > 2) {
+						Navigator.MoveResult move_result = navigator.move(move_target);
+						if (move_result == Navigator.MoveResult.SUCCESS) {
+							return true;
+						}
 					}
 					return false;
 				}
@@ -269,16 +295,23 @@ public class Soldier extends RunnableBot
 					if (!in_vision) {
 						continue;
 					}
-
+					controller.setIndicatorString(Boolean.toString(retreat_moving_strategy.willWeWin()));
 					// Be aggressive, prioritize our own damage
-					score = expected_damage;
+					score = 0;
+					double bravery = -0.25 + controller.getHealth() / 100;
+					expected_damage = (1-bravery) * expected_damage;
 					if (controller.isActionReady() && in_range) {
-						if (retreat_moving_strategy.willWeWin() && Cache.friendly_soldiers.length > Cache.opponent_soldiers.length + 1) {
-							score = expected_damage - expected_damage_from_opponents;
+						if (retreat_moving_strategy.willWeWin()
+								&& Cache.friendly_soldiers.length > Cache.opponent_soldiers.length + 1
+						) {
+							score = expected_damage * 1.2 - expected_damage_from_opponents * 0.8;
+						}
+						else {
+							score = expected_damage * 1.1 - expected_damage_from_opponents * 0.9;
 						}
 					}
 					else if (controller.isActionReady() && !in_range) {
-						score = expected_damage * 0.3 - expected_damage_from_opponents;
+						score = expected_damage * 0.6 - expected_damage_from_opponents;
 					}
 					else {
 						score = expected_damage - expected_damage_from_opponents;
