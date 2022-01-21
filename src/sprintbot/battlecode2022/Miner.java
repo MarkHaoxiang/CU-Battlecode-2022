@@ -198,7 +198,24 @@ public class Miner extends RunnableBot
 				}
 			}
 			if (move_target == null) {
-				move_target = navigator.randomLocation();
+				// read large METAL spots
+				MatrixCommunicator.read(Communicator.Event.METAL);
+				int min_dist = 9999;
+				for (int i = 0; i < Cache.metal_compressed_locations.length; i++) {
+					if (Cache.metal_compressed_locations[i] == -1) {
+						break;
+					}
+					MapLocation target = MatrixCommunicator.unzipCompressedLocation(Cache.metal_compressed_locations[i]);
+					int dist = Navigator.travelDistance(my_location, target);
+					if (dist < min_dist) {
+						min_dist = dist;
+						move_target = target;
+					}
+				}
+				if (move_target == null) {
+					move_target = navigator.randomLocation();
+				}
+
 				/*
 				int tries = 0;
 				while (MatrixCommunicator.read(Communicator.Event.FRIENDLY_MINER,move_target) && tries < 5) {
