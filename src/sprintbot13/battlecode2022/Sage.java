@@ -1,9 +1,9 @@
-package sprintbot.battlecode2022;
+package sprintbot13.battlecode2022;
 
 import battlecode.common.*;
-import sprintbot.RunnableBot;
-import sprintbot.battlecode2022.util.*;
-import sprintbot.battlecode2022.util.navigation.IntegratedNavigator;
+import sprintbot13.RunnableBot;
+import sprintbot13.battlecode2022.util.*;
+import sprintbot13.battlecode2022.util.navigation.IntegratedNavigator;
 
 public class Sage extends RunnableBot {
 
@@ -14,8 +14,6 @@ public class Sage extends RunnableBot {
     private final RetreatMoveStrategy retreat_move_strategy = new RetreatMoveStrategy();
     private final FightMoveStrategy fight_move_strategy = new FightMoveStrategy();
     private final SearchMoveStrategy search_move_strategy = new SearchMoveStrategy();
-
-    boolean has_moved = false;
 
     public Sage(RobotController rc) throws GameActionException {
         super(rc);
@@ -115,83 +113,6 @@ public class Sage extends RunnableBot {
     class FightMoveStrategy implements MoveStrategy {
         private MapLocation move_target = null;
 
-        public double calculateScore (MapLocation location) throws GameActionException {
-            RobotController controller = getRobotController();
-            MapLocation my_location = controller.getLocation();
-
-            boolean in_opponent_vision = false;
-            boolean opponent_in_my_vision = false;
-            boolean in_range = false;
-
-            double expected_damage_from_opponents = 0;
-            double my_expected_damage = 0;
-
-            int max_health_in_range = 0;
-            double damage_from_abyss = 0;
-            int kills_from_abyss = 0;
-            int distance_to_closest = 9999;
-
-            if (location.equals(my_location)
-                    || controller.canMove(my_location.directionTo(location))
-                    || !controller.isMovementReady()) { // !ismovementready for attackStrategy to use. Careful
-                for (RobotInfo robot : Cache.opponent_soldiers) {
-                    MapLocation robot_location = robot.getLocation();
-                    int distance_to_robot = robot_location.distanceSquaredTo(location);
-                    distance_to_closest = Math.min(distance_to_robot, distance_to_closest);
-
-                    if (!opponent_in_my_vision && distance_to_robot <= RobotType.SAGE.visionRadiusSquared) {
-                        opponent_in_my_vision = true;
-                    }
-                    if (!in_opponent_vision && distance_to_robot < robot.getType().visionRadiusSquared) {
-                        in_opponent_vision = true;
-                    }
-
-                    if (distance_to_robot <= robot.getType().actionRadiusSquared) {
-                        double rubble = controller.senseRubble(robot_location);
-                        expected_damage_from_opponents += robot.getType().damage / ((1.0 + rubble / 10.0) * robot.getType().actionCooldown / 10.0);
-                    }
-
-                    if (distance_to_robot <= RobotType.SAGE.actionRadiusSquared) {
-                        if (max_health_in_range < 45) {
-                            max_health_in_range = Math.max(max_health_in_range, Math.min(45, robot.getHealth()));
-                        }
-                        in_range = true;
-                        int potential_damage = (int) (robot.getType().getMaxHealth(1) * 0.22);
-                        damage_from_abyss += potential_damage;
-                        if (potential_damage > robot.getHealth()) {
-                            kills_from_abyss += 1;
-                        }
-                    }
-                }
-
-                double rubble = controller.senseRubble(location);
-                double damage = controller.getType().damage;
-                double base_cooldown = controller.getType().actionCooldown;
-                double cooldown_rubble = ((1.0 + rubble / 10.0) * base_cooldown / 10.0);
-                my_expected_damage = damage / cooldown_rubble;
-
-
-                // Calculate score
-                double score = 0;
-                if (!opponent_in_my_vision) {
-                    score = -10;
-                }
-
-                if (!controller.isActionReady()) {
-                    if (!in_opponent_vision) {
-                        score += 5;
-                    }
-                    score -= ((1.0 + rubble / 10.0) * controller.getType().movementCooldown / 10.0);
-                    ;
-                    score -= expected_damage_from_opponents;
-                } else {
-                    score = Math.max(my_expected_damage, damage_from_abyss / base_cooldown);
-                }
-                return score;
-            }
-            return -100;
-        }
-
         @Override
         public boolean move() throws GameActionException {
             RobotController controller = getRobotController();
@@ -205,22 +126,83 @@ public class Sage extends RunnableBot {
 
             for (MapLocation location : navigator.adjacentLocationWithCenter(my_location)) {
 
+                boolean in_opponent_vision = false;
+                boolean opponent_in_my_vision = false;
+                boolean in_range = false;
+
+                double expected_damage_from_opponents = 0;
+                double my_expected_damage = 0;
+
+                int max_health_in_range = 0;
+                double damage_from_abyss = 0;
+                int kills_from_abyss = 0;
+
                 if (location.equals(my_location) || controller.canMove(my_location.directionTo(location))) {
+                    for (RobotInfo robot : Cache.opponent_soldiers) {
+                        MapLocation robot_location = robot.getLocation();
+                        int distance_to_robot = robot_location.distanceSquaredTo(location);
 
-                    double score = calculateScore(location);
+                        if (!opponent_in_my_vision && distance_to_robot <= RobotType.SAGE.visionRadiusSquared) {
+                            opponent_in_my_vision = true;
+                        }
+                        if (!in_opponent_vision && distance_to_robot < robot.getType().visionRadiusSquared) {
+                            in_opponent_vision = true;
+                        }
 
-                    if (score > best_score && score > -50) {
+                        if (distance_to_robot <= robot.getType().actionRadiusSquared) {
+                            double rubble = controller.senseRubble(robot_location);
+                            expected_damage_from_opponents += robot.getType().damage / ((1.0+rubble/10.0) * robot.getType().actionCooldown / 10.0);
+                        }
+
+                        if (distance_to_robot <= RobotType.SAGE.actionRadiusSquared) {
+                            if (max_health_in_range < 45) {
+                                max_health_in_range = Math.max(max_health_in_range,Math.min (45, robot.getHealth()));
+                            }
+                            in_range = true;
+                            int potential_damage = (int) (robot.getType().getMaxHealth(1) * 0.22);
+                            damage_from_abyss += potential_damage;
+                            if (potential_damage > robot.getHealth()) {
+                                kills_from_abyss += 1;
+                            }
+                        }
+                    }
+
+                    double rubble = controller.senseRubble(location);
+                    double damage = controller.getType().damage;
+                    double base_cooldown = controller.getType().actionCooldown;
+                    double cooldown_rubble = ((1.0+rubble/10.0) * base_cooldown / 10.0);
+                    my_expected_damage = damage / cooldown_rubble;
+
+
+                    // Calculate score
+                    double score = 0;
+                    if (!opponent_in_my_vision) {
+                        continue;
+                    }
+
+                    if (!controller.isActionReady()) {
+                        if (!in_opponent_vision) {
+                            score += 5;
+                        }
+                        score -= ((1.0+rubble/10.0) * controller.getType().movementCooldown / 10.0);;
+                        score -= expected_damage_from_opponents;
+                    }
+                    else {
+                        score = Math.max(my_expected_damage,damage_from_abyss/base_cooldown);
+                    }
+
+                    if (score > best_score) {
                         best_score = score;
                         best_location = location;
                     }
-                }
 
+                }
             }
 
             if (best_location != null) {
                 Navigator.MoveResult move_result = ((IntegratedNavigator)navigator).move(best_location,true);
-                //controller.setIndicatorString(best_location.toString());
-                if (move_result == Navigator.MoveResult.SUCCESS || move_result == Navigator.MoveResult.REACHED) {
+                controller.setIndicatorString(best_location.toString());
+                if (move_result == Navigator.MoveResult.SUCCESS) {
                     return true;
                 }
             }
@@ -249,7 +231,7 @@ public class Sage extends RunnableBot {
                         }
                     }
                 }
-                if (((IntegratedNavigator)navigator).move(Cache.MY_SPAWN_LOCATION,true) == Navigator.MoveResult.SUCCESS) return true;
+                if (navigator.move(Cache.MY_SPAWN_LOCATION) == Navigator.MoveResult.SUCCESS) return true;
                 return false;
         }
 
@@ -257,11 +239,6 @@ public class Sage extends RunnableBot {
         {
 
             int health = getRobotController().getHealth();
-
-            if (getRobotController().isActionReady() && Cache.opponent_soldiers.length > 0) {
-                return false;
-            }
-
             if (health >= 91) {
                 return false;
             }
@@ -290,8 +267,6 @@ public class Sage extends RunnableBot {
 
     class DefaultAttackStrategy implements AttackStrategy {
 
-
-        int WAIT_SCORE_THRESHOLD = 1;
         @Override
         public boolean attack() throws GameActionException {
             // TODO: make sure we are in a suitable position before envisioning
@@ -300,19 +275,6 @@ public class Sage extends RunnableBot {
             RobotInfo[] robots = controller.senseNearbyRobots(RobotType.SAGE.actionRadiusSquared,Cache.OPPONENT_TEAM);
 
             int droids = 0;
-
-
-            /*
-            // Save attack for better spot?
-            if (!has_moved && controller.getHealth() < 50 && controller.getActionCooldownTurns() / 10 < 4) {
-                double current_score = fight_move_strategy.calculateScore(my_location);
-                for (MapLocation potential : navigator.adjacentLocationWithCenter(my_location)) {
-                    if (fight_move_strategy.calculateScore(potential) > current_score + WAIT_SCORE_THRESHOLD) {
-                        return false;
-                    }
-                }
-            }
-             */
 
             MapLocation best_attack = null;
             int best_score = -9999;
@@ -378,7 +340,6 @@ public class Sage extends RunnableBot {
 
         current_attacking_strategy = default_attack_strategy;
         current_moving_strategy = search_move_strategy;
-        has_moved = false;
 
         if (retreat_move_strategy.shouldRun()) {
             current_moving_strategy = retreat_move_strategy;
@@ -400,15 +361,11 @@ public class Sage extends RunnableBot {
         }
 
         if (getRobotController().isMovementReady()) {
-            if (current_moving_strategy.move()) {
-                has_moved = true;
-            }
+            current_moving_strategy.move();
         }
 
         if (getRobotController().isActionReady()) {
             current_attacking_strategy.attack();
         }
-
-        //getRobotController().setIndicatorString(String.valueOf(getRobotController().isActionReady()));
     }
 }

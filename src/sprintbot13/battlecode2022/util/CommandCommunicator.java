@@ -1,12 +1,12 @@
-package sprintbot.battlecode2022.util;
+package sprintbot13.battlecode2022.util;
 
 import battlecode.common.*;
-import sprintbot.battlecode2022.Archon;
+import sprintbot13.battlecode2022.Archon;
 
 public class CommandCommunicator extends Communicator {
 
     private static final int BITS_FOR_ARCHON_IDS = 10;
-    private static final int HEADER_PRIORITY_OFFSET = 15;
+    private static final int HEADER_PRIORITY_OFFSET = 16;
     private static int archon_id = -1;
     private static int orignal_archon_number;
     private static MapLocation[] all_archon_spawn_locations = null;
@@ -132,7 +132,7 @@ public class CommandCommunicator extends Communicator {
     }
 
     /* Spawn Schema
-    * 15th - 22nd
+    * 16th - 23rd
     * Each archon allocated 31 bits to transfer commands to newly spawned units
     * 3 bits role identifier (eg. farmer, defender, attacker, wall etc)
     * 12 bits uncompressed map location
@@ -212,7 +212,6 @@ public class CommandCommunicator extends Communicator {
         //System.out.println(HEADER_PRIORITY_OFFSET + archon_id);
         controller.writeSharedArray(HEADER_PRIORITY_OFFSET + archon_id * 2,value);
         controller.writeSharedArray(HEADER_PRIORITY_OFFSET + archon_id * 2 + 1, (spawn_location.x << 6) + spawn_location.y + 1);
-
     }
 
     public static int getMyID() {
@@ -232,7 +231,6 @@ public class CommandCommunicator extends Communicator {
         MapLocation my_location = controller.getLocation();
         for (int archon = 0; archon < 4; archon ++) {
             int spawn_location = controller.readSharedArray(HEADER_PRIORITY_OFFSET + archon * 2 + 1);
-
             if (spawn_location - 1 == (my_location.x << 6) + my_location.y) {
                 // Found the archon
                 int value = controller.readSharedArray(HEADER_PRIORITY_OFFSET + archon * 2);

@@ -1,4 +1,4 @@
-package sprintbot.battlecode2022.util;
+package sprintbot13.battlecode2022.util;
 
 import battlecode.common.*;
 
@@ -21,10 +21,9 @@ public class Cache
 	public static int MY_VISION_RADIUS;
 	
 	// the end of data is marked with -1
-	public static int[] opponent_archon_compressed_locations = new int[81];
-	public static int[] metal_compressed_locations = new int[81];
-	public static int[] opponent_soldier_compressed_locations = new int[81];
-	public static int[] builder_request_compressed_locations = new int[81];
+	public static int[] opponent_archon_compressed_locations = new int[64];
+	public static int[] metal_compressed_locations = new int[64];
+	public static int[] opponent_soldier_compressed_locations = new int[64];
 
 	public static MapLocation main_force_target;
 

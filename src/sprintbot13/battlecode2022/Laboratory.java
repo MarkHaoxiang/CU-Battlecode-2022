@@ -1,8 +1,8 @@
-package sprintbot.battlecode2022;
+package sprintbot13.battlecode2022;
 
 import battlecode.common.*;
-import sprintbot.RunnableBot;
-import sprintbot.battlecode2022.util.*;
+import sprintbot13.RunnableBot;
+import sprintbot13.battlecode2022.util.*;
 
 public class Laboratory extends RunnableBot {
 
@@ -38,17 +38,8 @@ public class Laboratory extends RunnableBot {
 
         if (Cache.opponent_total_damage > getRobotController().getHealth() && !has_labelled_dead && num_lab > 1) {
             getRobotController().writeSharedArray(CommandCommunicator.LAB_INDEX,num_lab-1);
-            MatrixCommunicator.update(Communicator.Event.BUILDER_REQUEST,getRobotController().getLocation(),false);
             has_labelled_dead = true;
         }
-        else if (getRobotController().getHealth() < RobotType.LABORATORY.getMaxHealth(1)) {
-            MatrixCommunicator.update(Communicator.Event.BUILDER_REQUEST,getRobotController().getLocation(),true);
-        }
-
-        if (getRobotController().getHealth() >= RobotType.LABORATORY.getMaxHealth(1)) {
-            MatrixCommunicator.update(Communicator.Event.BUILDER_REQUEST,getRobotController().getLocation(),false);
-        }
-
         if (Cache.opponent_soldiers.length == 0 && has_labelled_dead) {
             getRobotController().writeSharedArray(CommandCommunicator.LAB_INDEX,num_lab+1);
             has_labelled_dead = false;

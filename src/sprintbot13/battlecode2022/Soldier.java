@@ -1,8 +1,8 @@
-package sprintbot.battlecode2022;
+package sprintbot13.battlecode2022;
 
 		import battlecode.common.*;
-		import sprintbot.RunnableBot;
-		import sprintbot.battlecode2022.util.*;
+		import sprintbot13.RunnableBot;
+		import sprintbot13.battlecode2022.util.*;
 
 		import java.awt.*;
 
@@ -251,16 +251,12 @@ public class Soldier extends RunnableBot
 					boolean in_range = false;
 					boolean in_vision = false;
 					boolean in_archon = false;
-					boolean finish = false;
 					for (RobotInfo robot : Cache.friendly_buildings) {
-						if (robot.getLocation().isWithinDistanceSquared(location,RobotType.ARCHON.actionRadiusSquared)) {
+						if (robot.getLocation().isWithinDistanceSquared(my_location,RobotType.ARCHON.actionRadiusSquared)) {
 							in_archon = true;
 						}
 					}
 					for (RobotInfo robot : Cache.opponent_soldiers) {
-						if (robot.getHealth() < 3) {
-							finish = true;
-						}
 						//int start = Clock.getBytecodeNum();
 						MapLocation robot_location = robot.getLocation();
 						in_vision = robot_location.isWithinDistanceSquared(location,RobotType.SOLDIER.visionRadiusSquared);
@@ -298,12 +294,6 @@ public class Soldier extends RunnableBot
 					double bravery = -0.25 + controller.getHealth() / 100.0;
 					expected_damage = (1-bravery) * expected_damage;
 					if (controller.isActionReady() && in_range) {
-						if (in_archon) {
-							score += 2;
-						}
-						if (finish ) {
-							score += 1;
-						}
 						if (retreat_moving_strategy.willWeWin()
 								&& Cache.friendly_soldiers.length > Cache.opponent_soldiers.length + 1
 						) {
@@ -315,6 +305,9 @@ public class Soldier extends RunnableBot
 					}
 					else if (controller.isActionReady() && !in_range) {
 						score = expected_damage * 0.6 - expected_damage_from_opponents;
+						if (in_archon) {
+							score -= 2;
+						}
 					}
 					else {
 						score = expected_damage - expected_damage_from_opponents;

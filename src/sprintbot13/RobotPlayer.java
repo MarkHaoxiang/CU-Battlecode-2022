@@ -1,8 +1,8 @@
-package sprintbot;
+package sprintbot13;
 
 import battlecode.common.*;
-import sprintbot.battlecode2022.*;
-import sprintbot.battlecode2022.util.Constants;
+import sprintbot13.battlecode2022.*;
+import sprintbot13.battlecode2022.util.Constants;
 
 /**
  * RobotPlayer is the class that describes your main robot strategy.
@@ -23,8 +23,6 @@ public strictfp class RobotPlayer
 	@SuppressWarnings("unused")
 	public static void run(RobotController rc) throws GameActionException
 	{
-
-
 		RobotPlayer.controller = rc;
 		
 		RunnableBot bot;
@@ -57,6 +55,7 @@ public strictfp class RobotPlayer
 		
 		while (true)
 		{
+
 
 			// This code runs during the entire lifespan of the robot, which is why it is in an infinite
 			// loop. If we ever leave this loop and return from run(), the robot dies! At the end of the

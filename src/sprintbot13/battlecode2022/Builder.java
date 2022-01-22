@@ -1,8 +1,8 @@
-package sprintbot.battlecode2022;
+package sprintbot13.battlecode2022;
 
 import battlecode.common.*;
-import sprintbot.RunnableBot;
-import sprintbot.battlecode2022.util.*;
+import sprintbot13.RunnableBot;
+import sprintbot13.battlecode2022.util.*;
 
 import java.util.*;
 
@@ -203,13 +203,11 @@ public class Builder extends RunnableBot
 
     class FightMoveStrategy implements MoveStrategy {
 
-        MapLocation move_target;
+        MapLocation move_target = navigator.randomLocation();
         RobotController controller = getRobotController();
-        boolean is_random = true;
 
         @Override
         public boolean move() throws GameActionException {
-
 
 
             // Add watchtower support
@@ -217,46 +215,16 @@ public class Builder extends RunnableBot
             for (RobotInfo robot : Cache.friendly_buildings) {
                 if (robot.getHealth() < robot.getType().health && my_location.distanceSquaredTo(robot.getLocation()) > 5) {
                     move_target = robot.getLocation();
-                    is_random = false;
                     break;
                 }
-                else if (robot.getHealth() < robot.getType().health && my_location.distanceSquaredTo(robot.getLocation()) <= 2 && robot.getType() == RobotType.ARCHON) {
+                else if (robot.getHealth() < robot.getType().health && my_location.distanceSquaredTo(robot.getLocation()) <= 2) {
                     Direction dir = robot.getLocation().directionTo(my_location);
                     move_target = (robot.getLocation().add(dir).add(dir));
-                    is_random = false;
                     break;
                 }
                 else if (robot.getHealth() < robot.getType().health) {
                     move_target = my_location;
-                    is_random = false;
                     break;
-                }
-            }
-
-            if (move_target == null || is_random) {
-                MatrixCommunicator.read(Communicator.Event.BUILDER_REQUEST);
-                if (Cache.builder_request_compressed_locations[0] != -1) {
-                    move_target = Communicator.getClosestFromCompressedLocationArray(Cache.builder_request_compressed_locations,getRobotController().getLocation());
-                    is_random = false;
-                }
-            }
-
-            if (move_target == null) {
-                is_random = true;
-                move_target = navigator.randomLocation();
-            }
-
-
-            if (is_random && Cache.can_see_archon && controller.senseLead(my_location) == 0) {
-                int distance = 9999;
-                for (RobotInfo robot : Cache.friendly_buildings) {
-                    if (robot.getType() == RobotType.ARCHON) {
-                        distance = Math.min(distance,robot.getLocation().distanceSquaredTo(controller.getLocation()));
-                    }
-                }
-                if (distance > 5) {
-                    controller.disintegrate();
-                    return false;
                 }
             }
 
@@ -265,7 +233,7 @@ public class Builder extends RunnableBot
             switch (move_result) {
                 case IMPOSSIBLE:
                 case REACHED:
-                    move_target = null;
+                    move_target = navigator.randomLocation();
                     return false;
                 case SUCCESS:
                     return true;
@@ -359,7 +327,7 @@ public class Builder extends RunnableBot
 
             for (RobotInfo robot : Cache.friendly_buildings) {
 
-                if (robot.getHealth() < robot.getType().getMaxHealth(robot.getLevel()) && controller.canRepair(robot.getLocation())) {
+                if (robot.getHealth() < robot.getType().health && controller.canRepair(robot.getLocation())) {
                     //controller.setIndicatorLine(controller.getLocation(),robot.getLocation(),0,255,0);
                     controller.repair(robot.getLocation());
                     return true;
