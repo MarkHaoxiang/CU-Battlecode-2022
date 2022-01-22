@@ -4,7 +4,7 @@ import battlecode.common.*;
 
 public class Constants {
 
-    public static final boolean DEBUG = true;
+    public static final boolean DEBUG = false;
 
     public static final Direction[] DIRECTIONS =
             {Direction.NORTH, Direction.NORTHEAST,

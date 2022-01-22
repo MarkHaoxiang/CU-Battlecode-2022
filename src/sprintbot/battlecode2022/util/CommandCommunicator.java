@@ -9,7 +9,7 @@ public class CommandCommunicator extends Communicator {
     private static final int HEADER_PRIORITY_OFFSET = 15;
     private static int archon_id = -1;
     private static int orignal_archon_number;
-    private static MapLocation[] all_archon_spawn_locations = null;
+    private static MapLocation[] all_archon_spawn_locations = new MapLocation[4];
 
 
     /* Header Schema - first 16 bits
@@ -253,7 +253,36 @@ public class CommandCommunicator extends Communicator {
         return new SpawnOrder(type2Role(controller.getType()),controller.getLocation());
     }
 
+    public static void updateArchonLocations() throws GameActionException {
+        if (controller.getType() == RobotType.ARCHON) {
+            System.out.println("Who wrote a bug? updateLocation");
+            return;
+        }
+
+        for (int archon = 0; archon < 4; archon += 1) {
+            int v2 = controller.readSharedArray(HEADER_PRIORITY_OFFSET + archon * 2 + 1);
+            int v1 = controller.readSharedArray(HEADER_PRIORITY_OFFSET + archon * 2);
+            if ((v2 >> (BITS_PER_INTEGER - 1) == 1)) {
+                // Dead friendly archon
+                all_archon_spawn_locations[archon] = null;
+                continue;
+            }
+
+            if ((v1 & 0b111111) == 0) {
+                continue;
+            }
+
+            if (v2 > 0) {
+                v2 -= -1;
+                int x = (v2 >> 6) & 0b111111;
+                int y = v2 & 0b111111;
+                all_archon_spawn_locations[archon] = new MapLocation(x, y);
+            }
+        }
+    }
+
     public static void updateTeamTotalSpawn() throws GameActionException {
+
         if (controller.getType() != RobotType.ARCHON) {
             System.out.println("Who wrote a bug? updateSpawnA");
             return;

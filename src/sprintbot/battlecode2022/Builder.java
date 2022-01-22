@@ -66,16 +66,18 @@ public class Builder extends RunnableBot
         MoveStrategy move_strategy;
 
         if (state == BuilderState.FARMING) {
-            move_strategy = farm_move_strategy;
             getRobotController().setIndicatorString("Farm");
+            move_strategy = farm_move_strategy;
+
         }
         else if (state == BuilderState.BUILDING) {
             getRobotController().setIndicatorString("Lab");
             move_strategy = lab_move_strategy;
         }
         else {
-            move_strategy = fight_move_strategy;
             getRobotController().setIndicatorString("Fight");
+            move_strategy = fight_move_strategy;
+
         }
 
         if (getRobotController().isMovementReady()) {
@@ -132,6 +134,13 @@ public class Builder extends RunnableBot
 
             if (controller.getLocation().distanceSquaredTo(assigned_location) <= 4) {
                 has_reached_assigned = true;
+                if (Cache.opponent_soldiers.length > Cache.friendly_soldiers.length) {
+                    System.out.println("BAD idea");
+                    int v = controller.readSharedArray(CommandCommunicator.BANK_INDEX);
+                    controller.writeSharedArray(CommandCommunicator.BANK_INDEX,v-180);
+                    state = BuilderState.FIGHTING;
+                    return false;
+                }
             }
 
             if (!has_reached_assigned) {
@@ -209,7 +218,6 @@ public class Builder extends RunnableBot
 
         @Override
         public boolean move() throws GameActionException {
-
 
 
             // Add watchtower support
@@ -309,6 +317,9 @@ public class Builder extends RunnableBot
             }
 
             if (best_location != null) {
+
+                controller.setIndicatorString(best_location.toString());
+
                 Navigator.MoveResult move_result = navigator.move(best_location);
                 switch (move_result) {
                     case SUCCESS:
@@ -321,7 +332,7 @@ public class Builder extends RunnableBot
                 }
             }
             else {
-                if (controller.getLocation().distanceSquaredTo(assigned_location) <= 1) {
+                if (controller.getLocation().distanceSquaredTo(assigned_location) <= 4) {
                     System.out.println("Transition");
                     state = BuilderState.FIGHTING;
                     return false;

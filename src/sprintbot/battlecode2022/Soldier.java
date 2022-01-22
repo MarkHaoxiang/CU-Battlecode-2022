@@ -54,6 +54,8 @@ public class Soldier extends RunnableBot
 		@Override
 		public boolean move() throws GameActionException
 		{
+
+
 			// Go for nearby soldiers first
 			MapLocation my_location = getRobotController().getLocation();
 			MapLocation potential_target = Communicator.getClosestFromCompressedLocationArray(Cache.opponent_soldier_compressed_locations,
@@ -125,6 +127,7 @@ public class Soldier extends RunnableBot
 		@Override
 		public boolean move() throws GameActionException
 		{
+			CommandCommunicator.updateArchonLocations();
 			if (shouldRun()) {
 
 				RobotController controller = getRobotController();
@@ -153,7 +156,29 @@ public class Soldier extends RunnableBot
 						}
 					}
 				}
-				if (navigator.move(Cache.MY_SPAWN_LOCATION) == Navigator.MoveResult.SUCCESS) return true;
+
+				Navigator.MoveResult move_result = navigator.move(Cache.MY_SPAWN_LOCATION);
+				switch (move_result) {
+					case SUCCESS:
+						return true;
+					case FAIL:
+						return false;
+					case REACHED:
+					case IMPOSSIBLE:
+						controller.setIndicatorDot(getRobotController().getLocation(),0,0,0);
+						MapLocation close = null;
+						for (MapLocation archon : CommandCommunicator.getSpawnLocations()) {
+							if (archon != null ) {
+								if (close == null || close.distanceSquaredTo(getRobotController().getLocation()) > archon.distanceSquaredTo(getRobotController().getLocation())) {
+									close = archon;
+								}
+							}
+						}
+						if (close != null) {
+							Cache.MY_SPAWN_LOCATION = close;
+						}
+						return false;
+				}
 			}
 			return false;
 		}

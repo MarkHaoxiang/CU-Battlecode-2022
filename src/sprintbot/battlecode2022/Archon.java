@@ -5,6 +5,7 @@ import sprintbot.RunnableBot;
 import sprintbot.battlecode2022.util.*;
 
 import java.awt.*;
+import java.util.Map;
 import java.util.Random;
 
 public class Archon extends RunnableBot
@@ -279,44 +280,37 @@ public class Archon extends RunnableBot
             int lab = controller.readSharedArray(CommandCommunicator.LAB_INDEX);
 
             if (smoothed_income - lab * 12 > 7
-                    && (soldier_number >= 2 + lab * 12)
-                    && (miner_number >= 4 + lab * 4)
+                    //&& (soldier_number >= 2 + lab * 6)
+                    && (miner_number >= 4 + lab * 6)
                     && (team_lead >= 40)
                     && (closestSoldierLocation[my_archon_id] == null || distanceToClosestSoldier[my_archon_id] > 10))
             {
                 MapLocation my_location = controller.getLocation();
                 MapLocation best = null;
-                int best_score = -9999;
-                for (Direction direction : Constants.DIRECTIONS)
+                for (MapLocation location: new MapLocation[]{
+                        new MapLocation(0,0),
+                        new MapLocation(0,Cache.MAP_HEIGHT - 1),
+                        new MapLocation(Cache.MAP_WIDTH - 1, 0),
+                        new MapLocation(Cache.MAP_WIDTH - 1, Cache.MAP_HEIGHT - 1)})
                 {
-                    MapLocation potential = my_location.translate(direction.dx * LAB_DISTANCE, direction.dy * LAB_DISTANCE);
-                    if (navigator.inMap(potential))
-                    {
-                        int score = 0;
-                        if (closestSoldierLocation[my_archon_id] != null)
-                        {
-                            MapLocation enemy_loc = Communicator.getClosestFromCompressedLocationArray(Cache.opponent_soldier_compressed_locations,
-                                    Cache.controller.getLocation());
-                            if (enemy_loc == null) enemy_loc = new MapLocation(Cache.MAP_WIDTH / 2, Cache.MAP_HEIGHT / 2);
-                            score = Math.min(Navigator.travelDistance(potential, closestSoldierLocation[my_archon_id]),
-                                    Navigator.travelDistance(potential, enemy_loc));
-                        }
-                        else
-                        {
-                            score = Math.max(Cache.MAP_HEIGHT, Cache.MAP_WIDTH) - Math.min(
-                                    Math.min(potential.x, Cache.MAP_WIDTH - potential.x),
-                                    Math.min(potential.y, Cache.MAP_WIDTH - potential.y));
-                        }
-                        if (score > best_score)
-                        {
-                            best_score = score;
-                            best = potential;
-                        }
-                    }
+                    if (best == null || location.distanceSquaredTo(my_location) < best.distanceSquaredTo(my_location))
+                        best = location;
                 }
-
+                //System.out.printf("best = %s, my location = %s\n",best.toString(),my_location.toString());
+                int dist = Navigator.travelDistance(my_location, best);
+                if (dist >= 8)
+                {
+                    int bx = ((int) (8.0 / dist * (- my_location.x + best.x)) + my_location.x);
+                    int by = ((int) (8.0 / dist * (- my_location.y + best.y)) + my_location.y);
+                    best = new MapLocation(bx, by);
+                }
+                //System.out.printf("tried 1 %s\n",best.toString());
+                if (!navigator.inMap(best))
+                    best = null;
+                //System.out.printf("tried 2\n");
                 if (best != null)
                 {
+                    //System.out.printf("tried 3\n");
                     if (tryBuild(RobotType.BUILDER, CommandCommunicator.RobotRole.LAB_BUILDER, best))
                     {
                         controller.writeSharedArray(CommandCommunicator.LAB_INDEX, lab + 1);
@@ -559,12 +553,19 @@ public class Archon extends RunnableBot
             switch (team_build_order)
             {
                 case 0: // Miner, anyone can build tbh
-                    return buildMiner();
+                    return buildFarmer();
                 case 1:
+                    if (Cache.opponent_soldiers.length > 0) {
+                        return buildSoldier();
+                    }
+                    return buildMiner();
                 case 2:
                 case 4: // Soldier
                     return buildSoldier();
                 case 3: // Farmer or miner
+                    if (Cache.opponent_soldiers.length > 0) {
+                        return buildSoldier();
+                    }
                     if (miner_number < 6 * controller.getArchonCount() || distanceToClosestSoldier[my_archon_id] <= 8)
                     {
                         return buildMiner();
@@ -796,8 +797,8 @@ public class Archon extends RunnableBot
             if (current_score < max_score && controller.canTransform() && controller.getTeamLeadAmount(Cache.OUR_TEAM) <= 200)
             {
                 relocate_target = best;
-                System.out.printf("relocate_target:%s, score:%f, scoreofsouth:%f",relocate_target,max_score,
-                        calculateScore(controller.getLocation().add(Direction.SOUTH)));
+                //System.out.printf("relocate_target:%s, score:%f, scoreofsouth:%f",relocate_target,max_score,
+                //        calculateScore(controller.getLocation().add(Direction.SOUTH)));
                 return true;
             }
             if (rechoose)
@@ -905,7 +906,7 @@ public class Archon extends RunnableBot
     private boolean tryBuild(RobotType type, Direction dir, CommandCommunicator.RobotRole role, MapLocation loc) throws GameActionException
     {
 
-        int save = getRobotController().readSharedArray(CommandCommunicator.BANK_INDEX);
+        int save = Math.min(500,getRobotController().readSharedArray(CommandCommunicator.BANK_INDEX));
         int money = getRobotController().getTeamLeadAmount(Cache.OUR_TEAM) - save;
 
         if (money < type.buildCostLead)
@@ -981,4 +982,3 @@ public class Archon extends RunnableBot
         return false;
     }
 }
-
