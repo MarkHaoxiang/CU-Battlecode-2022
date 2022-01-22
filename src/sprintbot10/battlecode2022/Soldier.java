@@ -82,7 +82,14 @@ public class Soldier extends RunnableBot
 			if (move_target == null)
 			{
 				is_random = true;
-				move_target = navigator.randomLocation();
+				move_target = new MapLocation(Cache.MAP_WIDTH / 2, Cache.MAP_HEIGHT / 2);
+				if (move_target.distanceSquaredTo(Cache.MY_SPAWN_LOCATION) > 35)
+				{
+					double k = 35 * 1.0 / move_target.distanceSquaredTo(Cache.MY_SPAWN_LOCATION);
+					int dx = (int) (k * (move_target.x - Cache.MY_SPAWN_LOCATION.x));
+					int dy = (int) (k * (move_target.y - Cache.MY_SPAWN_LOCATION.y));
+					move_target = new MapLocation(Cache.MY_SPAWN_LOCATION.x + dx, Cache.MY_SPAWN_LOCATION.y + dy);
+				}
 			}
 
 
@@ -121,7 +128,7 @@ public class Soldier extends RunnableBot
 	class RetreatMoveStrategy implements MoveStrategy
 	{
 
-		int HP_THRESHOLD = 13;
+		int HP_THRESHOLD = 16;
 		@Override
 		public boolean move() throws GameActionException
 		{
@@ -140,24 +147,23 @@ public class Soldier extends RunnableBot
 					}
 				}
 				// Greedy move away
-				if (direction != null && navigator.move(controller.getLocation().add(direction).add(direction)) == Navigator.MoveResult.SUCCESS) {
-					return true;
-				}
-				else {
-					if (Cache.can_see_archon) {
-						for (RobotInfo robot : Cache.friendly_buildings) {
-							if (robot.getType() == RobotType.ARCHON && robot.getLocation().isWithinDistanceSquared(controller.getLocation(),8)) {
-								return false;
-							}
+				if (Cache.can_see_archon)
+				{
+					for (RobotInfo robot : Cache.friendly_buildings)
+					{
+						if (robot.getType() == RobotType.ARCHON && robot.getLocation().isWithinDistanceSquared(controller.getLocation(), 8))
+						{
+							return false;
 						}
 					}
-					if (navigator.move(Cache.MY_SPAWN_LOCATION) == Navigator.MoveResult.SUCCESS) return true;
 				}
+				if (navigator.move(Cache.MY_SPAWN_LOCATION) == Navigator.MoveResult.SUCCESS) return true;
 			}
 			return false;
 		}
 
-		public boolean shouldRun () {
+		public boolean shouldRun () throws GameActionException
+		{
 
 			int health = getRobotController().getHealth();
 			if (health == RobotType.SOLDIER.health) {
@@ -174,9 +180,10 @@ public class Soldier extends RunnableBot
 				if (Cache.opponent_soldiers.length > 0 && (getRobotController().getHealth() > HP_THRESHOLD || willWeWin())) {
 					return false;
 				}
-				if (health > 20 && Cache.injured > 3) {
+				if (health > 15 && Cache.injured > 3) {
 					return false;
 				}
+				MatrixCommunicator.update(Communicator.Event.SOLDIER,getRobotController().getLocation(),false);
 				return true;
 			}
 			return false;
@@ -186,7 +193,7 @@ public class Soldier extends RunnableBot
 			if (Cache.opponent_soldiers.length == 0) {
 				return true;
 			}
-			if (Cache.our_total_health / Cache.opponent_total_damage >= Cache.opponent_total_health / Cache.our_total_damage * 1.2) {
+			if (1.0 * Cache.our_total_health / Cache.opponent_total_damage >= 1.0 * Cache.opponent_total_health / Cache.our_total_damage * 1.2) {
 				return true;
 			}
 			return false;
@@ -233,7 +240,7 @@ public class Soldier extends RunnableBot
 
 
 			// Should we chase close to dead opponents?
-
+			
 			// Fighting
 			// Assume we can win, code to determine should not be here
 			// Heuristic time
@@ -298,7 +305,7 @@ public class Soldier extends RunnableBot
 					controller.setIndicatorString(Boolean.toString(retreat_moving_strategy.willWeWin()));
 					// Be aggressive, prioritize our own damage
 					score = 0;
-					double bravery = -0.25 + controller.getHealth() / 100;
+					double bravery = -0.25 + controller.getHealth() / 100.0;
 					expected_damage = (1-bravery) * expected_damage;
 					if (controller.isActionReady() && in_range) {
 						if (retreat_moving_strategy.willWeWin()
@@ -340,14 +347,22 @@ public class Soldier extends RunnableBot
 		public boolean attack() throws GameActionException
 		{
 			// TODO: Maybe consider potential damage to a robot? Or damage output of opponent>
-			// Currently prioritizes lowest health soldiers
-			int lowest = 9999;
+			// Currently prioritizes lowest health soldiers XX Now changes to score-based
+			int best_score = -9999999;
 			MapLocation lowest_location = null;
+			int dmg = getRobotController().getType().getDamage(0);
 
 			for (RobotInfo robot : Cache.opponent_soldiers) {
-				if (robot.health < lowest && getRobotController().canAttack(robot.getLocation())) {
-					lowest = robot.health;
-					lowest_location = robot.location;
+				if (getRobotController().canAttack(robot.getLocation())) {
+					int score = 0;
+					score = (40 - (robot.health + dmg - 1) / dmg) * 300;
+					score -= robot.getLocation().distanceSquaredTo(getRobotController().getLocation()) * 2;
+					score -= getRobotController().senseRubble(robot.getLocation()) / 4;
+					if (score > best_score)
+					{
+						lowest_location = robot.location;
+						best_score = score;
+					}
 				}
 			}
 			if (lowest_location != null) {
@@ -387,7 +402,8 @@ public class Soldier extends RunnableBot
 				Cache.controller.attack(lowest_location);
 				return true;
 			}
-
+			
+			int lowest = 999999;
 			for (RobotInfo robot : Cache.opponent_villagers) {
 				if (robot.health < lowest && getRobotController().canAttack(robot.getLocation())) {
 					lowest = robot.health;
