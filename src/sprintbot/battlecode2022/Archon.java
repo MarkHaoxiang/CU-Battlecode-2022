@@ -15,10 +15,11 @@ public class Archon extends RunnableBot {
 
     // Build Strategy
 
+    int counter = 0;
     int income = 0;
-    int farmer_number = 0;
+    int miner_number = 0;
     int soldier_number = 0;
-    int idle_farmer_number = 0;
+    int idle_miner_number = 0;
     double smoothed_income;
     Random rand_gen = new Random(213568721);
     public double rand = 0;
@@ -56,7 +57,13 @@ public class Archon extends RunnableBot {
 
         Cache.update();
         updateGlobal();
-        rand = rand_gen.nextDouble();
+
+        // Ensure consistent even when overflow bytecode
+        while (counter < getRobotController().getRoundNum()) {
+            counter ++;
+            rand = rand_gen.nextDouble();
+        }
+
 
         MatrixCommunicator.read(Communicator.Event.SOLDIER);
         if (getRobotController().getRoundNum() % 5 == 0 || Cache.opponent_archon_compressed_locations == null) {
@@ -88,7 +95,7 @@ public class Archon extends RunnableBot {
         // Early game build
         if (Cache.opponent_archon_compressed_locations[0] == -1
                 && Cache.opponent_soldier_compressed_locations[0] == -1
-                && team_total_miners <= Math.max(3*controller.getArchonCount(), Math.min(8,controller.getMapHeight()*controller.getMapWidth() / 100))) {
+                && team_total_miners <= Math.max(3*controller.getArchonCount(), Math.min(6,controller.getMapHeight()*controller.getMapWidth() / 100))) {
             controller.setIndicatorString("Early miner");
             current_build_strategy = peaceful_strategy;
         }
@@ -168,34 +175,252 @@ public class Archon extends RunnableBot {
 
         int MAX_FARMER_PER_FARM = 10;
         int FARM_BUILT_BUFF = 10;
+        int LAB_DISTANCE;
         private int[] farms = new int[8];
 
-        private int debug_tot_soldier = 0;
+        RobotController controller = getRobotController();
+        int team_lead;
+        int team_gold;
+        int my_archon_id;
+        int team_build_order;
+        MapLocation[] team_spawn_locations; // Friendly Archon locations
+
+        MapLocation[] closestSoldierLocation;
+        int[] distanceToClosestSoldier;
+        double[] distanceToClosestSoldierAdjusted;
+        int totalDistance;
+        double totalAdjustedDistance;
+        int maxDistance;
+        int my_ranking;
+
+        TeamBuild() {
+            LAB_DISTANCE = (Cache.MAP_WIDTH+Cache.MAP_HEIGHT)/20;
+        }
 
         int TEAM_BUILD_ORDER_INDEX = 2;
+
+        boolean wantMutate = false;
+        boolean builtMutateSoldier = false;
+
+        private void selfMutate() throws GameActionException {
+
+            if (!builtMutateSoldier && wantMutate && Cache.injured <= 4) {
+                wantMutate = false;
+                controller.writeSharedArray(CommandCommunicator.BANK_INDEX,  controller.readSharedArray(CommandCommunicator.BANK_INDEX)-340);
+            }
+
+            if (!builtMutateSoldier && !wantMutate && controller.getLevel() == 1 && Cache.injured >= 6 && smoothed_income >= 10) {
+                wantMutate = true;
+                controller.writeSharedArray(CommandCommunicator.BANK_INDEX,  controller.readSharedArray(CommandCommunicator.BANK_INDEX)+340);
+            }
+
+            if (!builtMutateSoldier && team_lead >= controller.readSharedArray(CommandCommunicator.BANK_INDEX) && builtMutateSoldier) {
+                if (tryBuild(RobotType.BUILDER)) {
+                    controller.writeSharedArray(CommandCommunicator.BANK_INDEX,  controller.readSharedArray(CommandCommunicator.BANK_INDEX)-40);
+                    builtMutateSoldier = true;
+                }
+            }
+
+            if (builtMutateSoldier && controller.getLevel() == 2) {
+                controller.writeSharedArray(CommandCommunicator.BANK_INDEX,  controller.readSharedArray(CommandCommunicator.BANK_INDEX)-300);
+            }
+        }
+
+        private void buildLab() throws GameActionException {
+            // Lab strategy
+            // TODO: Maintain minimum distance
+            int lab = controller.readSharedArray(CommandCommunicator.LAB_INDEX);
+
+            if (smoothed_income - lab * 20 > 10
+                    && (soldier_number >= 2 + lab * 15)
+                    && (miner_number >= 4 + lab * 5)
+                    && (team_lead >= 40)
+                    && (closestSoldierLocation[my_archon_id] == null || distanceToClosestSoldier[my_archon_id] > 10)) {
+                MapLocation my_location = controller.getLocation();
+                MapLocation best = null;
+                int best_score = -9999;
+                for (Direction direction : Constants.DIRECTIONS) {
+                    MapLocation potential = my_location.translate(direction.dx*LAB_DISTANCE,direction.dy*LAB_DISTANCE);
+                    if (navigator.inMap(potential)) {
+                        int score = 0;
+                        if (closestSoldierLocation[my_archon_id] != null) {
+                            score = Navigator.travelDistance(potential,closestSoldierLocation[my_archon_id]);
+                        }
+                        else {
+                            score = Math.max(Cache.MAP_HEIGHT,Cache.MAP_WIDTH) - Math.min(
+                                    Math.min(potential.x,Cache.MAP_WIDTH- potential.x),
+                                    Math.min(potential.y,Cache.MAP_WIDTH- potential.y));
+                        }
+                        if (score > best_score) {
+                            best_score = score;
+                            best = potential;
+                        }
+                    }
+                }
+
+                if (best != null) {
+                    if (tryBuild(RobotType.BUILDER, CommandCommunicator.RobotRole.LAB_BUILDER,best)) {
+                        controller.writeSharedArray(CommandCommunicator.LAB_INDEX,lab+1);
+                        controller.writeSharedArray(CommandCommunicator.BANK_INDEX,  controller.readSharedArray(CommandCommunicator.BANK_INDEX)+180);
+                    }
+                }
+            }
+        }
+
+        private boolean buildSage() throws GameActionException {
+            double c = 0;
+            if (totalDistance == 0) {
+                // Equal distribution
+                for (int i = 0; i < distanceToClosestSoldier.length; i ++) {
+                    c += 1.0 / (double)distanceToClosestSoldier.length;
+                    if (rand < c) {
+                        if (i == my_archon_id && tryBuild(RobotType.SAGE)) {
+                            return true;
+                        }
+                        return false;
+                    }
+                }
+            }
+            else {
+                for (int i = 0; i < distanceToClosestSoldier.length; i ++) {
+                    c += distanceToClosestSoldierAdjusted[i] / totalAdjustedDistance;
+                    if (rand < c) {
+                        if (i == my_archon_id && tryBuild(RobotType.SAGE)) {
+                            return true;
+                        }
+                        return false;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private boolean buildSoldier() throws GameActionException {
+            double c = 0;
+            if (totalDistance == 0) {
+                // Equal distribution
+                for (int i = 0; i < distanceToClosestSoldier.length; i ++) {
+                    c += 1.0 / (double)distanceToClosestSoldier.length;
+                    if (rand < c) {
+                        if (i == my_archon_id && tryBuild(RobotType.SOLDIER)) {
+                            getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
+                            return true;
+                        }
+                        return false;
+                    }
+                }
+            }
+            else {
+                for (int i = 0; i < distanceToClosestSoldier.length; i ++) {
+                    c += distanceToClosestSoldierAdjusted[i] / totalAdjustedDistance;
+                    if (rand < c) {
+                        if (i == my_archon_id && tryBuild(RobotType.SOLDIER)) {
+                            getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
+                            return true;
+                        }
+                        return false;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private boolean buildMiner() throws GameActionException {
+            if (getRobotController().getRoundNum() % getRobotController().getArchonCount() == my_ranking ||
+                    CommandCommunicator.isLastArchon()) {
+                if (tryBuild(RobotType.MINER)) {
+                    getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private boolean buildFarmer() throws GameActionException {
+            if (distanceToClosestSoldier[my_archon_id] < 8) {
+                if (maxDistance < 8) {
+                    getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
+                    return false;
+                }
+                return false;
+            }
+            if (getRobotController().getRoundNum() % getRobotController().getArchonCount() == my_ranking ||
+                    CommandCommunicator.isLastArchon()) {
+                double[] danger = new double[8];
+                double[] score = new double[8];
+                MapLocation my_location = getRobotController().getLocation();
+                for (int enemy : Cache.opponent_soldier_compressed_locations) {
+                    if (enemy == -1) break;
+                    MapLocation location = Communicator.unzipCompressedLocation(enemy);
+                    int dir = Navigator.directionToInt(my_location.directionTo(location));
+                    double dist = Navigator.travelDistance(my_location,location);
+                    danger[dir] += 60 - dist;
+                }
+                double maximum_score = -9999;
+                int maximum_direction = -1;
+                for (int i = 0; i < 8; i ++) {
+                    score[i] = -(danger[i] + danger[(i+1) % 8] * 0.5 + danger[(i+7)%8] * 0.5) + farms[i] * FARM_BUILT_BUFF;
+                    Direction dir = Navigator.intToDirection(i);
+                    if (farms[i] > MAX_FARMER_PER_FARM || !getRobotController().onTheMap(my_location.add(dir).add(dir).add(dir))) {
+                        score[i] = -9999;
+                    }
+                    if (score[i] > maximum_score) {
+                        maximum_score = score[i];
+                        maximum_direction = i;
+                    }
+                }
+                if (maximum_score > -9999) {
+                    Direction dir = Navigator.intToDirection(maximum_direction);
+                    MapLocation farm_location = my_location.add(dir).add(dir).add(dir);
+                    if (tryBuild(RobotType.BUILDER,dir, CommandCommunicator.RobotRole.FARM_BUILDER,farm_location)) {
+                        getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
+                        farms[maximum_direction] += 1;
+                        //System.out.println("Building farmer");
+                        return true;
+                    }
+                    else if (tryBuild(RobotType.BUILDER, CommandCommunicator.RobotRole.FARM_BUILDER,farm_location)) {
+                        getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
+                        farms[maximum_direction] += 1;
+                        //System.out.println("Building farmer");
+                        return true;
+                    }
+                }
+                if (distanceToClosestSoldier[my_archon_id] == maxDistance) {
+                    getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
+                }
+                return false;
+            }
+            return false;
+        }
+
         @Override
         public boolean build() throws GameActionException {
 
-            RobotController controller = getRobotController();
-            int team_lead = controller.getTeamLeadAmount(Cache.OUR_TEAM);
-            if (team_lead < 40) { //Can't build anything, don't waste bytecode
+            //Update state information
+            team_lead = controller.getTeamLeadAmount(Cache.OUR_TEAM);
+            team_gold = controller.getTeamGoldAmount(Cache.OUR_TEAM);
+
+            if (team_lead < 40 && team_gold < 20) { //Can't build anything, don't waste bytecode
                 return false;
             }
-            int my_archon_id = CommandCommunicator.getMyID();
-            int team_build_order = controller.readSharedArray(TEAM_BUILD_ORDER_INDEX) % 5;
-            MapLocation[] team_spawn_locations = CommandCommunicator.getSpawnLocations();
-            int[] distanceToClosestSoldier = new int[team_spawn_locations.length];
-            double[] distanceToClosestSoldierAdjusted = new double[team_spawn_locations.length];
-            int totalDistance = 0;
-            double totalAdjustedDistance = 0;
-            int maxDistance = 0;
+            my_archon_id = CommandCommunicator.getMyID();
+            team_build_order = controller.readSharedArray(TEAM_BUILD_ORDER_INDEX) % 5;
+            team_spawn_locations = CommandCommunicator.getSpawnLocations();
+            distanceToClosestSoldier = new int[team_spawn_locations.length];
+            distanceToClosestSoldierAdjusted = new double[team_spawn_locations.length];
+            totalDistance = 0;
+            totalAdjustedDistance = 0;
+            maxDistance = 0;
+            closestSoldierLocation = new MapLocation[team_spawn_locations.length];
 
             for (int i = 0; i < team_spawn_locations.length; i ++) {
                 if (team_spawn_locations[i] != null && Cache.opponent_soldier_compressed_locations[0] != -1) {
 
+                    MapLocation soldier = MatrixCommunicator.getClosestFromCompressedLocationArray(Cache.opponent_soldier_compressed_locations,team_spawn_locations[i]);
                     distanceToClosestSoldier[i] = Navigator.travelDistance(team_spawn_locations[i],
-                            MatrixCommunicator.getClosestFromCompressedLocationArray(Cache.opponent_soldier_compressed_locations,team_spawn_locations[i]));
+                            soldier);
 
+                    closestSoldierLocation[i] = soldier;
                     //distanceToClosestSoldierAdjusted[i] = Math.sqrt(60 - distanceToClosestSoldier[i]);
                     distanceToClosestSoldierAdjusted[i] = Math.pow((Math.max (Cache.MAP_WIDTH,Cache.MAP_HEIGHT)- distanceToClosestSoldier[i]),2);
                     totalAdjustedDistance += distanceToClosestSoldierAdjusted[i];
@@ -212,42 +437,10 @@ public class Archon extends RunnableBot {
                 }
             }
 
+            buildLab();
+            selfMutate();
 
-            // Lab strategy
-            // TODO: Maintain minimum distance
-            int lab = controller.readSharedArray(CommandCommunicator.LAB_INDEX);
-
-            if (smoothed_income - lab * 15 > 10 && soldier_number > 15 && farmer_number > 10 && team_lead >= 40) {
-                MapLocation my_location = controller.getLocation();
-                MapLocation closest = null;
-                for (MapLocation loc : new MapLocation[] {
-                        new MapLocation(0, my_location.y),
-                        new MapLocation(Cache.MAP_WIDTH-1, my_location.y),
-                        new MapLocation(my_location.x, Cache.MAP_WIDTH-1),
-                        new MapLocation(my_location.x, 0),
-                }) {
-                    if (closest == null || closest.distanceSquaredTo(my_location) > loc.distanceSquaredTo(my_location)) {
-                        closest = loc;
-                    }
-                }
-
-                if (tryBuild(RobotType.BUILDER, CommandCommunicator.RobotRole.LAB_BUILDER,closest)) {
-                    controller.writeSharedArray(CommandCommunicator.LAB_INDEX,lab+1);
-                    controller.writeSharedArray(CommandCommunicator.BANK_INDEX,  controller.readSharedArray(CommandCommunicator.BANK_INDEX)+180);
-                }
-            }
-
-            /*
-            if (CommandCommunicator.isLastArchon()) {
-                for (int i = 0; i < distanceToClosestSoldier.length; i ++) {
-                    System.out.println(distanceToClosestSoldierAdjusted[i] / totalAdjustedDistance);
-                }
-            }
-            */
-            //System.out.println(debug_tot_soldier);
-
-
-            int my_ranking = 0;
+            my_ranking = 0;
             for (int i = 0; i < team_spawn_locations.length; i++) {
                 if (i == my_archon_id) {
                     break;
@@ -257,116 +450,20 @@ public class Archon extends RunnableBot {
                 }
             }
 
+            if (buildSage()) return true;
+
             switch (team_build_order) {
                 case 0: // Miner, anyone can build tbh
-                    if (getRobotController().getRoundNum() % getRobotController().getArchonCount() == my_ranking ||
-                            CommandCommunicator.isLastArchon()) {
-                        if (tryBuild(RobotType.MINER)) {
-                            getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
-                            return true;
-                        }
-                    }
-                    break;
+                    return buildMiner();
                 case 1:
                 case 2:
                 case 4: // Soldier
-                    double c = 0;
-                    if (totalDistance == 0) {
-                        // Equal distribution
-                        for (int i = 0; i < distanceToClosestSoldier.length; i ++) {
-                            c += 1.0 / (double)distanceToClosestSoldier.length;
-                            if (rand < c) {
-                                if (i == my_archon_id && tryBuild(RobotType.SOLDIER)) {
-                                    getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
-                                    debug_tot_soldier += 1;
-                                    return true;
-                                }
-                                return false;
-                            }
-                        }
-                    }
-                    else {
-                        for (int i = 0; i < distanceToClosestSoldier.length; i ++) {
-                            c += distanceToClosestSoldierAdjusted[i] / totalAdjustedDistance;
-                            if (rand < c) {
-                                if (i == my_archon_id && tryBuild(RobotType.SOLDIER)) {
-                                    getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
-                                    debug_tot_soldier += 1;
-                                    return true;
-                                }
-                                return false;
-                            }
-                        }
-                    }
-                    break;
+                    return buildSoldier();
                 case 3: // Farmer or miner
-
-                    if (farmer_number < Math.min(soldier_number/2,10) || distanceToClosestSoldier[my_archon_id] <= 8) {
-                        if (getRobotController().getRoundNum() % getRobotController().getArchonCount() == my_ranking ||
-                                CommandCommunicator.isLastArchon()) {
-                            if (tryBuild(RobotType.MINER)) {
-                                getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
-                                return true;
-                            }
-                        }
-                        return false;
+                    if (miner_number < 6 * controller.getArchonCount() || distanceToClosestSoldier[my_archon_id] <= 8) {
+                        return buildMiner();
                     }
-
-
-                    if (distanceToClosestSoldier[my_archon_id] < 8) {
-                        if (maxDistance < 8) {
-                            getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
-                            return false;
-                        }
-                        return false;
-                    }
-                    if (getRobotController().getRoundNum() % getRobotController().getArchonCount() == my_ranking ||
-                            CommandCommunicator.isLastArchon()) {
-                        double[] danger = new double[8];
-                        double[] score = new double[8];
-                        MapLocation my_location = getRobotController().getLocation();
-                        for (int enemy : Cache.opponent_soldier_compressed_locations) {
-                            if (enemy == -1) break;
-                            MapLocation location = Communicator.unzipCompressedLocation(enemy);
-                            int dir = Navigator.directionToInt(my_location.directionTo(location));
-                            double dist = Navigator.travelDistance(my_location,location);
-                            danger[dir] += 60 - dist;
-                        }
-                        double maximum_score = -9999;
-                        int maximum_direction = -1;
-                        for (int i = 0; i < 8; i ++) {
-                            score[i] = -(danger[i] + danger[(i+1) % 8] * 0.5 + danger[(i+7)%8] * 0.5) + farms[i] * FARM_BUILT_BUFF;
-                            Direction dir = Navigator.intToDirection(i);
-                            if (farms[i] > MAX_FARMER_PER_FARM || !getRobotController().onTheMap(my_location.add(dir).add(dir).add(dir))) {
-                                score[i] = -9999;
-                            }
-                            if (score[i] > maximum_score) {
-                                maximum_score = score[i];
-                                maximum_direction = i;
-                            }
-                        }
-                        if (maximum_score > -9999) {
-                            Direction dir = Navigator.intToDirection(maximum_direction);
-                            MapLocation farm_location = my_location.add(dir).add(dir).add(dir);
-                            if (tryBuild(RobotType.BUILDER,dir, CommandCommunicator.RobotRole.FARM_BUILDER,farm_location)) {
-                                getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
-                                farms[maximum_direction] += 1;
-                                //System.out.println("Building farmer");
-                                return true;
-                            }
-                            else if (tryBuild(RobotType.BUILDER, CommandCommunicator.RobotRole.FARM_BUILDER,farm_location)) {
-                                getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
-                                farms[maximum_direction] += 1;
-                                //System.out.println("Building farmer");
-                                return true;
-                            }
-                        }
-                        if (distanceToClosestSoldier[my_archon_id] == maxDistance) {
-                            getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX,(team_build_order + 1) % 5);
-                        }
-                        return false;
-                    }
-                    return false;
+                    return buildFarmer();
                 default:
                     System.out.println("BUGGGGG Spawn");
             }
@@ -519,21 +616,24 @@ public class Archon extends RunnableBot {
 
     private void updateGlobal() throws GameActionException {
         income = getRobotController().readSharedArray(CommandCommunicator.INCOME_INDEX) + 2;
-        smoothed_income = smoothed_income * 0.9 + income * 0.1;
-        farmer_number = getRobotController().readSharedArray(CommandCommunicator.TOTAL_FARMER_INDEX);
+        smoothed_income = smoothed_income * (14.0/15.0) + income * (1.0/15.0);
+        miner_number = getRobotController().readSharedArray(CommandCommunicator.TOTAL_FARMER_INDEX);
         soldier_number = getRobotController().readSharedArray(CommandCommunicator.SOLDIER_INDEX);
-        idle_farmer_number = getRobotController().readSharedArray(CommandCommunicator.IDLE_FARMER_INDEX);
+        idle_miner_number = getRobotController().readSharedArray(CommandCommunicator.IDLE_FARMER_INDEX);
 
         // Reset all
         if (CommandCommunicator.isLastArchon()) {
+            //System.out.println("hi");
             // System.out.println("========");
             // System.out.println(income);
             // System.out.println(soldier_number);
-            //System.out.println(idle_farmer_number);
-            // System.out.println(farmer_number);
+            // System.out.println(idle_miner_number);
+            // System.out.println(miner_number);
             for (int i = 5; i<=10; i ++) {
                 getRobotController().writeSharedArray(i,0);
             }
+
+            getRobotController().writeSharedArray(CommandCommunicator.SMOOTH_INCOME,(int)(smoothed_income * 100));
         }
     }
 

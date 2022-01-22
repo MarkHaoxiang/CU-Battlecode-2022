@@ -14,7 +14,7 @@ public class BugNavigator extends Navigator {
     private MapLocation prev_target;
     private MapLocation start_bug_location;
     private MapLocation obstacle;
-    private double gradient;
+    private double angle;
     private int stuck_turns;
 
     private final GreedyNavigator greedy;
@@ -90,9 +90,7 @@ public class BugNavigator extends Navigator {
             clockwise = true;
             count = 0;
             start_bug_location = current_location;
-            gradient =
-                    calculateGradient(current_location,
-                            target_location);
+            angle = calculateAngle(current_location,target_location);
             obstacle =
                     controller.adjacentLocation(
                             current_location.directionTo(
@@ -104,6 +102,7 @@ public class BugNavigator extends Navigator {
             if (start_bug_location.equals(current_location)) {
                 count += 1;
                 if (count >= 3) {
+                    stuck_turns += 1;
                     return MoveResult.FAIL;
                 }
             }
@@ -124,7 +123,7 @@ public class BugNavigator extends Navigator {
                 target_direction =
                         target_direction.rotateLeft();
             }
-            while (naive.move(target_direction) != MoveResult.SUCCESS) {
+            while (!controller.canMove(target_direction)) {
                 if (clockwise) {
                     target_direction =
                             target_direction.rotateRight();
@@ -167,13 +166,13 @@ public class BugNavigator extends Navigator {
                     target_location) <
                     start_bug_location.distanceSquaredTo(
                             target_location)) {
-                if (calculateGradient(current_location,
-                        target_location) > gradient &&
-                        calculateGradient(moveLoc,
-                                target_location) <= gradient) {
-                    is_bugging = false;
-                } else if (calculateGradient(moveLoc,
-                        target_location) >= gradient) {
+                double angle_a = calculateAngle(current_location, target_location);
+                double angle_b = calculateAngle(moveLoc, target_location);
+                double a = (angle - angle_a + 2 * Math.PI) % Math.PI;
+                double b = (angle - angle_b + 2 * Math.PI) % Math.PI;
+                if (a < Math.PI && b > Math.PI || a > Math.PI && b < Math.PI) {
+                    //controller.setIndicatorString(String.valueOf(a));
+                    //controller.setIndicatorString(String.valueOf(b));
                     is_bugging = false;
                 }
             }
@@ -184,14 +183,37 @@ public class BugNavigator extends Navigator {
 
     // Util
 
+    private static boolean sameSign(double x, double y) {
+        return ((x<0) == (y<0));
+    }
+
+    private static double calculateAngle (MapLocation start, MapLocation end) {
+        double x = end.x-start.x;
+        double y = end.y-start.y;
+
+        // Edge cases
+        if (x > 0 && y == 0) {
+            return 0.0;
+        }
+        if (x < 0 && y == 0) {
+            return  Math.PI;
+        }
+        double angle = Math.atan(x/y);
+        if (x>0) {
+            return angle;
+        }
+        return angle + Math.PI;
+    }
+
     private static double calculateGradient(
             MapLocation start, MapLocation end) {
-        if (start == null || end == null) return -2;
+        if (start == null || end == null) {
+            System.out.println("Who did this. BugNav bug");
+        }
         if (end.x - start.x == 0) {
-            return -1000;
+            return -10000;
         }
         //Rise over run
         return 1.0 * (end.y - start.y) / (end.x - start.x);
     }
-
 }

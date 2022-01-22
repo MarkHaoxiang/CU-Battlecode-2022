@@ -95,6 +95,8 @@ public class CommandCommunicator extends Communicator {
     public static final int IDLE_FARMER_INDEX = 6;
     public static final int INCOME_INDEX = 7;
     public static final int TOTAL_FARMER_INDEX = 8;
+    public static final int TOTAL_SAGE_INDEX = 9;
+    public static final int SMOOTH_INCOME = 11;
 
     /* Global Data Schema
     *  2 - Build order
@@ -106,7 +108,7 @@ public class CommandCommunicator extends Communicator {
     *  8 - Total farmer number
     *  9 - Sage number
     *  10 - Watch tower number
-    *
+    *  11 - Smooth income
     * */
 
     // TODO: Implement Priority Schema

@@ -56,11 +56,6 @@ public strictfp class RobotPlayer
 		while (true)
 		{
 
-			/*
-			if (controller.getRoundNum() == 100) {
-				controller.resign();
-			}
-			 */
 
 			// This code runs during the entire lifespan of the robot, which is why it is in an infinite
 			// loop. If we ever leave this loop and return from run(), the robot dies! At the end of the

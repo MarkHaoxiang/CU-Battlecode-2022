@@ -20,7 +20,7 @@ public class IntegratedNavigator extends Navigator
 
 
 		// Should we bug nav
-		if (controller.getType() == RobotType.SOLDIER
+		if (controller.getType() == RobotType.SOLDIER || controller.getType() == RobotType.SAGE
 				//&& controller.getRoundNum() % 6 >= 2
 		) {
 			isRestricted = true;
@@ -31,7 +31,7 @@ public class IntegratedNavigator extends Navigator
 		{
 			case 20:
 				dpNavigator = new DPR20Navigator(controller);
-				dpBytecodeCostUpperBound =5500; // TODO: Adjust
+				dpBytecodeCostUpperBound = 5500; // TODO: Adjust
 				break;
 			case 34:
 				dpNavigator = new DPR34Navigator(controller);
@@ -131,9 +131,12 @@ public class IntegratedNavigator extends Navigator
 		if (!controller.isMovementReady())
 			return MoveResult.FAIL;
 
+		/*
 		if (Constants.DEBUG) {
-			controller.setIndicatorString("Movement ready");
+			//controller.setIndicatorString("Movement ready");
 		}
+		*/
+		 
 		pickNavigator(target_location, overrideLimit);
 
 		//if (Constants.DEBUG)
