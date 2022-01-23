@@ -31,6 +31,9 @@ public class Laboratory extends RunnableBot {
         //System.out.println(smooth_income / 100.0 / num_lab);
 
         cash += expenditurePerTurn;
+        if (cash > 15) {
+            cash = 15;
+        }
 
         if (getRobotController().canTransmute() && cash >= getRobotController().getTransmutationRate()) {
             getRobotController().transmute();

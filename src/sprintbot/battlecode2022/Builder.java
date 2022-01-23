@@ -132,6 +132,13 @@ public class Builder extends RunnableBot
         @Override
         public boolean move() throws GameActionException {
 
+            if (Cache.age > 100 && !has_built) {
+                int v = controller.readSharedArray(CommandCommunicator.BANK_INDEX);
+                controller.writeSharedArray(CommandCommunicator.BANK_INDEX,v-180);
+                state = BuilderState.FIGHTING;
+                return false;
+            }
+
             if (controller.getLocation().distanceSquaredTo(assigned_location) <= 4) {
                 has_reached_assigned = true;
                 if (Cache.opponent_soldiers.length > Cache.friendly_soldiers.length) {
@@ -157,8 +164,8 @@ public class Builder extends RunnableBot
             if (best_location == null) {
                 for (MapLocation location : controller.getAllLocationsWithinRadiusSquared(controller.getLocation(),8)) {
                     int penalty = controller.senseRubble(location)
-                            + (controller.isLocationOccupied(location) ? 1 : 0) * 10 + Math.max(controller.getLocation().x,controller.getLocation().y)
-                            - (Cache.MAP_WIDTH+Cache.MAP_HEIGHT)/20;
+                            + (controller.isLocationOccupied(location) ? 1 : 0) * 10 +
+                            - Math.min(Navigator.travelDistance(Cache.MY_SPAWN_LOCATION,location),(Cache.MAP_WIDTH+Cache.MAP_HEIGHT)/20);
                     if (controller.onTheMap(location) && penalty < lowest_rubble) {
                         lowest_rubble = penalty;
                         best_location = location;
@@ -212,7 +219,7 @@ public class Builder extends RunnableBot
 
     class FightMoveStrategy implements MoveStrategy {
 
-        MapLocation move_target;
+        MapLocation move_target = Cache.MY_SPAWN_LOCATION;
         RobotController controller = getRobotController();
         boolean is_random = true;
 
@@ -290,6 +297,12 @@ public class Builder extends RunnableBot
 
         @Override
         public boolean move() throws GameActionException {
+
+            if (Cache.age >= 50) {
+                state = BuilderState.FIGHTING;
+                return false;
+            }
+
             MapLocation[] potential_spots = controller.senseNearbyLocationsWithLead(assigned_location,RobotType.BUILDER.visionRadiusSquared,-1);
             MapLocation best_location = null;
             int best_score = -9999;
@@ -297,14 +310,11 @@ public class Builder extends RunnableBot
                 MapLocation location = potential_spots[i];
                 if (controller.senseLead(location) == 0) {
                     boolean is_valid = true;
-                    for (RobotInfo robot : Cache.friendly_buildings) {
-                        if (robot.getType() == RobotType.ARCHON && robot.getLocation().distanceSquaredTo(location) <= 4) {
-                            is_valid = false;
-                            break;
-                        }
-                    }
                     if (is_valid) {
                         int score = - controller.senseRubble(location) / 2 - controller.getLocation().distanceSquaredTo(location);
+                        if (controller.isLocationOccupied(location)) {
+                            score -= 10;
+                        }
                         if (MatrixCommunicator.read(Communicator.Event.FRIENDLY_MINER,location)) {
                             score += 5;
                         }

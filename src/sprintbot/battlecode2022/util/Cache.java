@@ -50,6 +50,7 @@ public class Cache
 	public static int injured = 0;
 	public static MapLocation archon_location = null;
 	public static boolean opponent_watchtower = false;
+	public static boolean friendly_builder = false;
 
 	public static MapLocation[] lead_spots = null;
 	public static int lead_amount = 0;
@@ -116,6 +117,7 @@ public class Cache
 		injured = 0;
 		archon_location = null;
 		opponent_watchtower = false;
+		friendly_builder = false;
 
 		if (controller.getType() == RobotType.SOLDIER || controller.getType() == RobotType.SAGE) {
 			our_total_damage += (double)controller.getType().damage / (double)controller.getType().actionCooldown * 10.0;
@@ -139,8 +141,9 @@ public class Cache
 						}
 						fs ++;
 						break;
-					case MINER:
 					case BUILDER:
+						friendly_builder = true;
+					case MINER:
 						fv ++;
 						break;
 					case ARCHON:
@@ -270,7 +273,7 @@ public class Cache
 			 */
 		}
 
-		/*
+
 		MapLocation my_location = controller.getLocation();
 		if (has_report) {
 			//System.out.println(my_location);
@@ -288,7 +291,7 @@ public class Cache
 		if (has_lead[my_compressed] < REPORT_LEAD_THRESHOLD) {
 			MatrixCommunicator.update(Communicator.Event.METAL,my_compressed,false);
 		}
-		 */
+
 
 	}
 

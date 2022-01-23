@@ -3,8 +3,7 @@ package sprintbot.battlecode2022;
 		import battlecode.common.*;
 		import sprintbot.RunnableBot;
 		import sprintbot.battlecode2022.util.*;
-
-		import java.awt.*;
+		import sprintbot.battlecode2022.util.navigation.IntegratedNavigator;
 
 public class Soldier extends RunnableBot
 {
@@ -157,7 +156,7 @@ public class Soldier extends RunnableBot
 					}
 				}
 
-				Navigator.MoveResult move_result = navigator.move(Cache.MY_SPAWN_LOCATION);
+				Navigator.MoveResult move_result = ((IntegratedNavigator)navigator).move(Cache.MY_SPAWN_LOCATION,true);
 				switch (move_result) {
 					case SUCCESS:
 						return true;
@@ -323,12 +322,6 @@ public class Soldier extends RunnableBot
 					double bravery = -0.25 + controller.getHealth() / 100.0;
 					expected_damage = (1-bravery) * expected_damage;
 					if (controller.isActionReady() && in_range) {
-						if (in_archon) {
-							score += 2;
-						}
-						if (finish ) {
-							score += 1;
-						}
 						if (retreat_moving_strategy.willWeWin()
 								&& Cache.friendly_soldiers.length > Cache.opponent_soldiers.length + 1
 						) {
@@ -337,6 +330,12 @@ public class Soldier extends RunnableBot
 						else {
 							score = expected_damage * 1.1 - expected_damage_from_opponents * 0.9;
 						}
+						if (in_archon) {
+							score += 2;
+						}
+						if (finish ) {
+							score += 1;
+						}
 					}
 					else if (controller.isActionReady() && !in_range) {
 						score = expected_damage * 0.6 - expected_damage_from_opponents;
@@ -344,6 +343,8 @@ public class Soldier extends RunnableBot
 					else {
 						score = expected_damage - expected_damage_from_opponents;
 					}
+					//System.out.println(location);
+					//System.out.println(score);
 					if (score > best_score) {
 						best_score = score;
 						best_location = location;

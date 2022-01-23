@@ -34,12 +34,12 @@ public class Miner extends RunnableBot
 
 	protected MinerState state = MinerState.SEARCHING;
 	public static int LEAD_MINE_THRESHOLD = 1; // Do not mine if <= 1
-	
+
 	public Miner(RobotController rc) throws GameActionException
 	{
 		super(rc);
 	}
-	
+
 	@Override
 	public void init() throws GameActionException
 	{
@@ -103,15 +103,15 @@ public class Miner extends RunnableBot
 				getRobotController().readSharedArray(CommandCommunicator.INCOME_INDEX)+income);
 
 	}
-	
+
 	// Strategy
-	
+
 	interface MoveStrategy
 	{
 		boolean move() throws GameActionException;
 		void close() throws GameActionException;
 	}
-	
+
 	interface MineStrategy
 	{
 		boolean mine() throws GameActionException;
@@ -124,15 +124,15 @@ public class Miner extends RunnableBot
 		private MapLocation move_target = null;
 		private final int GIVE_UP_THRESHOLD_TURN = 3;
 		/* Number of turns to give up moving if repeatedly stuck
-		   Note that it is necessary because it might get surrounded by robots
-		   It is also probably related to bytecode limit, but we don't account for that now */
+           Note that it is necessary because it might get surrounded by robots
+           It is also probably related to bytecode limit, but we don't account for that now */
 		private boolean is_random = false;
-		private int SHARE_THRESHOLD;
+		private final int SHARE_THRESHOLD = 12;
 
 		public SearchMoveStrategy () {
 
 			// Select a direction to scout
-				// Did archon assign a location?
+			// Did archon assign a location?
 			if (assigned_location != null && assigned_location != getRobotController().getLocation()) {
 				move_target = assigned_location;
 				assigned_location = null;
@@ -187,8 +187,19 @@ public class Miner extends RunnableBot
 						closest_distance = d;
 						closest = lead_spot;
 					}
+				}
+
+				if (closest != null) {
 					move_target = closest;
+					is_random = true;
 					state = MinerState.MINING;
+					int lowest = getRobotController().senseRubble(closest);
+					for (MapLocation potential : navigator.adjacentLocationWithCenter(closest)) {
+						if (getRobotController().canSenseLocation(potential) && !getRobotController().isLocationOccupied(potential) && getRobotController().senseRubble(potential) < lowest) {
+							lowest = getRobotController().senseRubble(potential);
+							move_target = potential;
+						}
+					}
 				}
 			}
 
@@ -203,9 +214,26 @@ public class Miner extends RunnableBot
 					move_target = null;
 				}
 			}
+
+			if (!is_random && move_target != null) {
+				if (!MatrixCommunicator.read(Communicator.Event.METAL,move_target)) {
+					move_target = null;
+				}
+			}
+
 			if (move_target == null) {
 
+				MatrixCommunicator.read(Communicator.Event.METAL);
+				if (Cache.metal_compressed_locations[0] != -1) {
+					closest = Communicator.getClosestFromCompressedLocationArray(Cache.metal_compressed_locations,my_location);
+					if (Navigator.travelDistance(my_location,closest) < search_moving_strategy.SHARE_THRESHOLD) {
+						move_target = closest;
+						is_random = false;
+					}
+				}
+
 				if (move_target == null) {
+					is_random = true;
 					move_target = navigator.randomLocation();
 				}
 
@@ -219,16 +247,14 @@ public class Miner extends RunnableBot
 			}
 
 			int distance = move_target.distanceSquaredTo(my_location);
-			Navigator.MoveResult move_result = Navigator.MoveResult.REACHED;
-			if (closest == null || distance > 2 || distance < 2 && getRobotController().senseRubble(move_target) < getRobotController().senseRubble(my_location)) {
-				move_result = navigator.move(move_target);
-			}
+			Navigator.MoveResult move_result = navigator.move(move_target);
 
 			switch (move_result) {
 				case FAIL:
 					return false;
 				case IMPOSSIBLE:
 					move_target = navigator.randomLocation();
+					is_random = true;
 					navigator.move(move_target);
 					return true;
 				case REACHED:
@@ -254,6 +280,7 @@ public class Miner extends RunnableBot
 					else if (closest == null) {
 						move_target = navigator.randomLocation();
 						navigator.move(move_target);
+						is_random = true;
 					}
 					return true;
 				case SUCCESS:
@@ -332,6 +359,13 @@ public class Miner extends RunnableBot
 
 				if (closest != null) {
 					move_target = closest;
+					int lowest = getRobotController().senseRubble(closest);
+					for (MapLocation potential : navigator.adjacentLocationWithCenter(closest)) {
+						if (getRobotController().canSenseLocation(potential) && !getRobotController().isLocationOccupied(potential) && getRobotController().senseRubble(potential) < lowest) {
+							lowest = getRobotController().senseRubble(potential);
+							move_target = potential;
+						}
+					}
 				}
 				else if (mine_locations.length <= 1) {
 					close();
@@ -440,7 +474,7 @@ public class Miner extends RunnableBot
 						Cache.controller.mineGold(mineLocation);
 					while (Cache.controller.canMineLead(mineLocation)
 							&& ((Cache.controller.senseLead(mineLocation) > LEAD_MINE_THRESHOLD)
-							|| (Cache.controller.senseLead(mineLocation) > 0 && Cache.opponent_soldiers.length > Cache.friendly_soldiers.length + 1))) {
+							|| (Cache.controller.senseLead(mineLocation) > 0 && Cache.opponent_soldiers.length > Cache.friendly_soldiers.length))) {
 						Cache.controller.mineLead(mineLocation);
 						income += 1;
 					}

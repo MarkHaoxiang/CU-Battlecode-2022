@@ -237,6 +237,7 @@ public class Sage extends RunnableBot {
         public boolean move() throws GameActionException
         {
 
+            CommandCommunicator.updateArchonLocations();
                 RobotController controller = getRobotController();
                 // Greedy move away
                 if (Cache.can_see_archon)
@@ -249,7 +250,29 @@ public class Sage extends RunnableBot {
                         }
                     }
                 }
-                if (((IntegratedNavigator)navigator).move(Cache.MY_SPAWN_LOCATION,true) == Navigator.MoveResult.SUCCESS) return true;
+
+            Navigator.MoveResult move_result = ((IntegratedNavigator)navigator).move(Cache.MY_SPAWN_LOCATION,true);
+            switch (move_result) {
+                case SUCCESS:
+                    return true;
+                case FAIL:
+                    return false;
+                case REACHED:
+                case IMPOSSIBLE:
+                    controller.setIndicatorDot(getRobotController().getLocation(),0,0,0);
+                    MapLocation close = null;
+                    for (MapLocation archon : CommandCommunicator.getSpawnLocations()) {
+                        if (archon != null ) {
+                            if (close == null || close.distanceSquaredTo(getRobotController().getLocation()) > archon.distanceSquaredTo(getRobotController().getLocation())) {
+                                close = archon;
+                            }
+                        }
+                    }
+                    if (close != null) {
+                        Cache.MY_SPAWN_LOCATION = close;
+                    }
+                    return false;
+            }
                 return false;
         }
 
@@ -273,13 +296,15 @@ public class Sage extends RunnableBot {
                 }
             }
             else {
+                if (!getRobotController().isActionReady()) {
+                    return true;
+                }
                 if (Cache.opponent_soldiers.length > 0 && (getRobotController().getHealth() > HP_THRESHOLD)) {
                     return false;
                 }
-                if (health > 15 && Cache.injured > 3) {
+                if (health > 20 && Cache.injured > 5) {
                     return false;
                 }
-                MatrixCommunicator.update(Communicator.Event.SOLDIER,getRobotController().getLocation(),false);
                 return true;
             }
             return false;
@@ -302,9 +327,9 @@ public class Sage extends RunnableBot {
             int droids = 0;
 
 
-            /*
+
             // Save attack for better spot?
-            if (!has_moved && controller.getHealth() < 50 && controller.getActionCooldownTurns() / 10 < 4) {
+            if (!has_moved && controller.getHealth() < 50 && controller.getActionCooldownTurns() / 10 < 2) {
                 double current_score = fight_move_strategy.calculateScore(my_location);
                 for (MapLocation potential : navigator.adjacentLocationWithCenter(my_location)) {
                     if (fight_move_strategy.calculateScore(potential) > current_score + WAIT_SCORE_THRESHOLD) {
@@ -312,8 +337,9 @@ public class Sage extends RunnableBot {
                     }
                 }
             }
-             */
 
+
+            RobotInfo best = null;
             MapLocation best_attack = null;
             int best_score = -9999;
             for (RobotInfo robot : robots) {
@@ -346,13 +372,14 @@ public class Sage extends RunnableBot {
                         break;
                 }
                 if (robot.getHealth() <= 45) {
-                    score += 3; // Kill bonus
+                    score += 4; // Kill bonus
                     score -= 0.3 * (45 - robot.getHealth()); // Overkill penalty
                 }
 
                 if (score > best_score) {
                     best_score = score;
                     best_attack = robot.getLocation();
+                    best = robot;
                 }
             }
 
@@ -362,7 +389,12 @@ public class Sage extends RunnableBot {
             }
 
             if (best_attack != null && controller.canAttack(best_attack)) {
-                controller.attack(best_attack);
+                if (!best.getType().isBuilding() && best.getHealth() < best.getType().getMaxHealth(best.getLevel()) * 0.22) {
+                    controller.envision(AnomalyType.CHARGE);
+                }
+                else {
+                    controller.attack(best_attack);
+                }
             }
             return false;
         }

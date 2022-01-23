@@ -133,6 +133,11 @@ public abstract class Navigator {
         return controller.getAllLocationsWithinRadiusSquared(location,2);
     }
 
+    public int distanceToEdge (MapLocation loc) {
+        return Math.min(
+                Math.min(loc.distanceSquaredTo(new MapLocation(loc.x,0)),loc.distanceSquaredTo(new MapLocation(loc.x,Cache.MAP_HEIGHT-1))),
+                        Math.min(loc.distanceSquaredTo(new MapLocation(0,loc.y)),loc.distanceSquaredTo(new MapLocation (Cache.MAP_WIDTH-1,loc.y))));
+    }
 }
 
 

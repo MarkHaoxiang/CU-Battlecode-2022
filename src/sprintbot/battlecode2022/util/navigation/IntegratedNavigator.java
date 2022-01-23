@@ -26,6 +26,7 @@ public class IntegratedNavigator extends Navigator
 			isRestricted = true;
 		}
 
+		/*
 		switch (controller.getType().visionRadiusSquared)
 
 		{
@@ -46,6 +47,9 @@ public class IntegratedNavigator extends Navigator
 						controller.getType().visionRadiusSquared);
 				break;
 		}
+		 */
+		dpNavigator = new DPR20Navigator(controller);
+		dpBytecodeCostUpperBound = 5500;
 	}
 
 	private void pickNavigator(MapLocation target_location, boolean overrideLimit) throws GameActionException

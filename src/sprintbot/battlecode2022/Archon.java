@@ -17,6 +17,7 @@ public class Archon extends RunnableBot
 
     // Build Strategy
 
+    boolean is_peaceful = true;
     int counter = 0;
     int income = 0;
     int miner_number = 0;
@@ -25,18 +26,21 @@ public class Archon extends RunnableBot
     double smoothed_income;
     Random rand_gen = new Random(213568721);
     public double rand = 0;
+    int num_relocating = 0;
 
-    private final PeacefulBuild peaceful_strategy = new PeacefulBuild();
     private final TeamBuild team_strategy = new TeamBuild();
 
     // Relocate Strategy
     private RelocateStrategy current_relocate_strategy;
-    //private final ShortRangeRelocate short_range_relocate = new ShortRangeRelocate();
+    private final ShortRangeRelocate short_range_relocate = new ShortRangeRelocate();
     private final LongRangeRelocate long_range_relocate = new LongRangeRelocate();
 
     // Archon only
     public static int team_total_miners = 0;
     public static int team_total_soldiers = 0;
+
+    boolean is_long_range_relocate = false;
+    boolean is_short_range_relocate = false;
 
     MapLocation start_location = null;
 
@@ -59,31 +63,26 @@ public class Archon extends RunnableBot
     }
 
     @Override
-    public void turn() throws GameActionException
-    {
+    public void turn() throws GameActionException {
 
         Cache.update();
         updateGlobal();
 
         // Ensure consistent even when overflow bytecode
-        while (counter < getRobotController().getRoundNum())
-        {
+        while (counter < getRobotController().getRoundNum()) {
             counter++;
             rand = rand_gen.nextDouble();
         }
 
-
         MatrixCommunicator.read(Communicator.Event.SOLDIER);
-        if (getRobotController().getRoundNum() % 5 == 0 || Cache.opponent_archon_compressed_locations == null)
-        {
+        if (getRobotController().getRoundNum() % 5 == 0 || Cache.opponent_archon_compressed_locations == null) {
             MatrixCommunicator.read(Communicator.Event.ARCHON);
         }
 
         CommandCommunicator.deadManSwitch();
 
         // Last turn's spawn
-        if (last_order != null)
-        {
+        if (last_order != null) {
             CommandCommunicator.spawnMessage(last_order, last_location);
             last_location = null;
             last_order = null;
@@ -98,15 +97,51 @@ public class Archon extends RunnableBot
 
         //controller.setIndicatorString(Integer.toString(team_total_miners));
 
+
+        boolean sr = is_long_range_relocate || is_short_range_relocate;
         // Relocate
-        if (long_range_relocate.shouldRelocate())
+        /*
+        if (controller.getRoundNum() % 2 == 1 || is_long_range_relocate) {
+            if (!is_short_range_relocate && long_range_relocate.shouldRelocate()) {
+                long_range_relocate.relocate();
+            }
+            else if (is_long_range_relocate && controller.getMode() == RobotMode.PORTABLE && controller.isTransformReady()) {
+                controller.transform();
+                controller.writeSharedArray(CommandCommunicator.MIGRATION_INDEX,num_relocating-1);
+                is_long_range_relocate = false;
+            }
+        }
+        else if (controller.getRoundNum() % 2 == 0 || is_short_range_relocate) {
+            if (!is_long_range_relocate && short_range_relocate.shouldRelocate()) {
+                short_range_relocate.relocate();
+            }
+        }
+
+         */
+        if (!is_short_range_relocate && long_range_relocate.shouldRelocate()) {
             long_range_relocate.relocate();
-        else if (controller.getMode() == RobotMode.PORTABLE && controller.isTransformReady())
+        }
+        else if (is_long_range_relocate && controller.getMode() == RobotMode.PORTABLE && controller.isTransformReady()) {
             controller.transform();
+            //controller.writeSharedArray(CommandCommunicator.MIGRATION_INDEX,num_relocating-1);
+            is_long_range_relocate = false;
+        }
+
+        //System.out.println(is_short_range_relocate);
+        //System.out.println(is_long_range_relocate);
+        /*
+        if (!sr && (is_long_range_relocate || is_short_range_relocate)) {
+            controller.writeSharedArray(CommandCommunicator.MIGRATION_INDEX,num_relocating+1);
+            System.out.println("Adding");
+        }
+        */
+        /*
         if (long_range_relocate.relocate_target == null)
             controller.setIndicatorString("no relocation target");
         else
             controller.setIndicatorString(long_range_relocate.relocate_target.toString());
+
+         */
 
 
         if (controller.getHealth() < controller.getType().getMaxHealth(controller.getLevel()) && controller.getMode() == RobotMode.TURRET) {
@@ -122,7 +157,7 @@ public class Archon extends RunnableBot
                         Math.max(3 * controller.getArchonCount(), Math.min(6, controller.getMapHeight() * controller.getMapWidth() / 100)))
         {
             //controller.setIndicatorString("Early miner");
-            current_build_strategy = peaceful_strategy;
+            is_peaceful = true;
         }
         // Farmer build
         else
@@ -135,7 +170,7 @@ public class Archon extends RunnableBot
                 current_build_strategy = farm_strategy;
             }
             */
-            current_build_strategy = team_strategy;
+            is_peaceful = false;
         }
 
 
@@ -165,51 +200,6 @@ public class Archon extends RunnableBot
         boolean shouldRelocate() throws GameActionException;
     }
 
-    class PeacefulBuild implements BuildStrategy
-    {
-
-        int i = 0;
-
-        @Override
-        public boolean build() throws GameActionException
-        {
-
-            // Evenly distribute spawning
-            int[] other_archons = CommandCommunicator.getArchonIDList();
-            int archon_num = other_archons.length + 1;
-            Integer ranking = null;
-            for (int i = 0; i < other_archons.length; i++)
-            {
-                if (other_archons[i] == getRobotController().getID())
-                {
-                    archon_num--;
-                    ranking = i;
-                }
-            }
-            if (ranking == null)
-            {
-                ranking = 3;
-            }
-
-            if (getRobotController().getTeamLeadAmount(Cache.OUR_TEAM) < (getRobotController().getArchonCount() - ranking - 1) * 50
-                    && getRobotController().getRoundNum() % archon_num != ranking)
-            {
-                return false;
-            }
-            RobotType to_build = RobotType.MINER;
-            if (i % 5 == 4)
-            {
-                to_build = RobotType.SOLDIER;
-            }
-            if (tryBuild(to_build))
-            {
-                i++;
-                return true;
-            }
-            return false;
-        }
-    }
-
     class TeamBuild implements BuildStrategy
     {
 
@@ -232,6 +222,8 @@ public class Archon extends RunnableBot
         double totalAdjustedDistance;
         int maxDistance;
         int my_ranking;
+        boolean is_best_lab;
+        int[] distEdge;
 
         TeamBuild()
         {
@@ -279,42 +271,36 @@ public class Archon extends RunnableBot
             // TODO: Maintain minimum distance
             int lab = controller.readSharedArray(CommandCommunicator.LAB_INDEX);
 
-            if (smoothed_income - lab * 12 > 7
+            if (smoothed_income - lab * 10 > 8
                     //&& (soldier_number >= 2 + lab * 6)
-                    && (miner_number >= 4 + lab * 6)
+                    && (miner_number >= 4 + lab * 4)
                     && (team_lead >= 40)
                     && (closestSoldierLocation[my_archon_id] == null || distanceToClosestSoldier[my_archon_id] > 10))
             {
                 MapLocation my_location = controller.getLocation();
                 MapLocation best = null;
-                for (MapLocation location: new MapLocation[]{
-                        new MapLocation(0,0),
-                        new MapLocation(0,Cache.MAP_HEIGHT - 1),
-                        new MapLocation(Cache.MAP_WIDTH - 1, 0),
-                        new MapLocation(Cache.MAP_WIDTH - 1, Cache.MAP_HEIGHT - 1)})
-                {
-                    if (best == null || location.distanceSquaredTo(my_location) < best.distanceSquaredTo(my_location))
-                        best = location;
+                int best_score = -9999;
+                for (Direction direction : Constants.DIRECTIONS) {
+                    MapLocation potential = my_location.translate(direction.dx*LAB_DISTANCE,direction.dy*LAB_DISTANCE);
+                    if (navigator.inMap(potential)) {
+                        int score = 0;
+                        if (closestSoldierLocation[my_archon_id] != null) {
+                            score = Navigator.travelDistance(potential,closestSoldierLocation[my_archon_id]);
+                        }
+                        else {
+                            score = -navigator.distanceToEdge(potential);
+                        }
+                        if (score > best_score) {
+                            best_score = score;
+                            best = potential;
+                        }
+                    }
                 }
-                //System.out.printf("best = %s, my location = %s\n",best.toString(),my_location.toString());
-                int dist = Navigator.travelDistance(my_location, best);
-                if (dist >= 8)
-                {
-                    int bx = ((int) (8.0 / dist * (- my_location.x + best.x)) + my_location.x);
-                    int by = ((int) (8.0 / dist * (- my_location.y + best.y)) + my_location.y);
-                    best = new MapLocation(bx, by);
-                }
-                //System.out.printf("tried 1 %s\n",best.toString());
-                if (!navigator.inMap(best))
-                    best = null;
-                //System.out.printf("tried 2\n");
-                if (best != null)
-                {
-                    //System.out.printf("tried 3\n");
-                    if (tryBuild(RobotType.BUILDER, CommandCommunicator.RobotRole.LAB_BUILDER, best))
-                    {
-                        controller.writeSharedArray(CommandCommunicator.LAB_INDEX, lab + 1);
-                        controller.writeSharedArray(CommandCommunicator.BANK_INDEX, controller.readSharedArray(CommandCommunicator.BANK_INDEX) + 180);
+
+                if (best != null) {
+                    if (tryBuild(RobotType.BUILDER, CommandCommunicator.RobotRole.LAB_BUILDER,best)) {
+                        controller.writeSharedArray(CommandCommunicator.LAB_INDEX,lab+1);
+                        controller.writeSharedArray(CommandCommunicator.BANK_INDEX,  controller.readSharedArray(CommandCommunicator.BANK_INDEX)+180);
                     }
                 }
             }
@@ -491,6 +477,11 @@ public class Archon extends RunnableBot
             { //Can't build anything, don't waste bytecode
                 return false;
             }
+
+            if (controller.getHealth() < 300 && !Cache.friendly_builder) {
+                tryBuild(RobotType.BUILDER);
+            }
+
             my_archon_id = CommandCommunicator.getMyID();
             team_build_order = controller.readSharedArray(TEAM_BUILD_ORDER_INDEX) % 5;
             team_spawn_locations = CommandCommunicator.getSpawnLocations();
@@ -500,9 +491,18 @@ public class Archon extends RunnableBot
             totalAdjustedDistance = 0;
             maxDistance = 0;
             closestSoldierLocation = new MapLocation[team_spawn_locations.length];
+            is_best_lab = false;
+            int minEdge = 9999;
+            int[] distEdge = new int[team_spawn_locations.length];
 
             for (int i = 0; i < team_spawn_locations.length; i++)
             {
+
+                if (team_spawn_locations[i] != null) {
+                    distEdge[i] = navigator.distanceToEdge(team_spawn_locations[i]);
+                    minEdge = Math.min(minEdge,distEdge[i]);
+                }
+
                 if (team_spawn_locations[i] != null && Cache.opponent_soldier_compressed_locations[0] != -1)
                 {
 
@@ -532,7 +532,20 @@ public class Archon extends RunnableBot
                 }
             }
 
-            buildLab();
+
+            if (controller.getRoundNum() > 5) {
+                if (CommandCommunicator.isLastArchon()) {
+                    buildLab();
+                }
+                else if (Cache.opponent_soldier_compressed_locations[0] != -1 && maxDistance <= distanceToClosestSoldier[my_archon_id]) {
+                    buildLab();
+                }
+                else if (minEdge < 9999 && minEdge >= distEdge[my_archon_id]) {
+                    buildLab();
+                }
+            }
+
+
             selfMutate();
 
             my_ranking = 0;
@@ -547,13 +560,15 @@ public class Archon extends RunnableBot
                     my_ranking++;
                 }
             }
-
             if (buildSage()) return true;
 
             switch (team_build_order)
             {
                 case 0: // Miner, anyone can build tbh
-                    return buildFarmer();
+                    if (Cache.opponent_soldiers.length > 0 && miner_number >= soldier_number) {
+                        return buildSoldier();
+                    }
+                    return buildMiner();
                 case 1:
                     if (Cache.opponent_soldiers.length > 0) {
                         return buildSoldier();
@@ -561,17 +576,19 @@ public class Archon extends RunnableBot
                     return buildMiner();
                 case 2:
                 case 4: // Soldier
+                    if (is_peaceful) return buildMiner();
                     return buildSoldier();
                 case 3: // Farmer or miner
+                    if (is_peaceful) return buildMiner();
                     if (Cache.opponent_soldiers.length > 0) {
                         return buildSoldier();
                     }
-                    if (miner_number < 6 * controller.getArchonCount() || distanceToClosestSoldier[my_archon_id] <= 8)
+                    if (distanceToClosestSoldier[my_archon_id] <= 8)
                     {
                         return buildMiner();
                     }
                     return buildFarmer();
-                default:
+                default: if (is_peaceful) return buildMiner();
                     System.out.println("BUGGGGG Spawn");
             }
             return false;
@@ -600,7 +617,7 @@ public class Archon extends RunnableBot
                     {
                         lowest_health = robot.getHealth();
                         lowest = robot.getLocation();
-                        if (lowest_health < 15)
+                        if (lowest_health < 4)
                         {
                             break;
                         }
@@ -639,56 +656,51 @@ public class Archon extends RunnableBot
             return false;
         }
     }
-	/*
-	class ShortRangeRelocate implements RelocateStrategy
-	{
 
-		MapLocation relocate_target = null;
-		RobotController controller = getRobotController();
+    class ShortRangeRelocate implements RelocateStrategy {
 
-		@Override
-		public boolean shouldRelocate() throws GameActionException
-		{
-			MapLocation my_location = controller.getLocation();
-			if (controller.getMode() == RobotMode.PORTABLE)
-			{
-				return true;
-			}
+        MapLocation relocate_target = null;
+        RobotController controller = getRobotController();
 
-			if (controller.getRoundNum() % 5 == 0)
-			{
-				return false;
-			}
+        @Override
+        public boolean shouldRelocate() throws GameActionException {
 
-			double current_score = calculateScore(my_location);
-			if (current_score > -18)
-			{
-				return false;
-			}
-			double max_score = -20000;
-			MapLocation best = null;
-			for (MapLocation potential : controller.getAllLocationsWithinRadiusSquared(my_location, 5))
-			{
-				double v = calculateScore(potential);
-				if (v > max_score)
-				{
-					max_score = v;
-					best = potential;
-				}
-			}
-			;
-			if (current_score / 2 < max_score && controller.canTransform())
-			{
-				relocate_target = best;
-				return true;
-			}
+            MapLocation my_location = controller.getLocation();
+            if (controller.getMode() == RobotMode.PORTABLE) {
+                return true;
+            }
 
-			relocate_target = null;
-			return false;
-		}
+            if (controller.getRoundNum() % 5 == 0) {
+                return false;
+            }
 
-		private double calculateScore(MapLocation location) throws GameActionException
-		{
+            if (num_relocating >= controller.getArchonCount() - 1) {
+                return false;
+            }
+
+            double current_score = calculateScore(my_location);
+            if (current_score > -18) {
+                return false;
+            }
+            double max_score = -20000;
+            MapLocation best = null;
+            for (MapLocation potential : controller.getAllLocationsWithinRadiusSquared(my_location,5)) {
+                double v = calculateScore(potential);
+                if (v > max_score) {
+                    max_score = v;
+                    best = potential;
+                }
+            };
+            if (current_score / 2 < max_score && controller.canTransform()) {
+                relocate_target = best;
+                return true;
+            }
+
+            relocate_target = null;
+            return false;
+        }
+
+        private double calculateScore (MapLocation location) throws GameActionException {
             /*
             for (RobotInfo building : Cache.friendly_buildings) {
                 if (building.getType() == RobotType.ARCHON
@@ -698,58 +710,53 @@ public class Archon extends RunnableBot
                 }
             }
             */
-	/*
-			double score = 0;
-			if (Cache.opponent_soldiers.length > 0 || controller.getRoundNum() < 20 && !location.equals(controller.getLocation()))
-			{
-				return -1000; // Probably shouldn't move
-			}
-			score = score - controller.senseRubble(location) - 10 - controller.getLocation().distanceSquaredTo(location) * 0.1;
-			if (!location.equals(getRobotController().getLocation()) && controller.isLocationOccupied(location))
-			{
-				score -= 100;
-			}
-			return score;
-		}
+            double score = 0;
+            if (Cache.opponent_soldiers.length > 0 || controller.getRoundNum() < 20 && !location.equals(controller.getLocation())) {
+                return -1000; // Probably shouldn't move
+            }
+            score = score - controller.senseRubble(location)-10 - controller.getLocation().distanceSquaredTo(location) * 0.1;
+            if (!location.equals(getRobotController().getLocation()) && controller.isLocationOccupied(location)) {
+                score -= 100;
+            }
+            return score;
+        }
 
-		@Override
-		public boolean relocate() throws GameActionException
-		{
+        @Override
+        public boolean relocate() throws GameActionException {
 
-			controller.setIndicatorLine(controller.getLocation(), relocate_target, 100, 100, 100);
-			// Move
-			if (!(controller.getMode() == RobotMode.PORTABLE))
-			{
-				if (controller.canTransform())
-				{
-					controller.transform();
-					return true;
-				}
-				return false;
-			}
+            is_short_range_relocate = true;
 
-			// Already there
+            controller.setIndicatorLine(controller.getLocation(),relocate_target,100,100,100);
+            // Move
+            if (! (controller.getMode() == RobotMode.PORTABLE)) {
+                if (controller.canTransform()) {
+                    controller.transform();
+                    return true;
+                }
+                return false;
+            }
 
-			if (controller.getLocation().equals(relocate_target))
-			{
-				if (controller.canTransform())
-				{
-					controller.transform();
-					return true;
-				}
-				return false;
-			}
-			// Move towards
-			Navigator.MoveResult move_result = navigator.move(relocate_target);
-			switch (move_result)
-			{
-				case SUCCESS:
-					return true;
-				default:
-					return false;
-			}
-		}
-	}*/
+            // Already there
+
+            if (controller.getLocation().equals(relocate_target)) {
+                if (controller.canTransform()) {
+                    controller.transform();
+                    //controller.writeSharedArray(CommandCommunicator.MIGRATION_INDEX,num_relocating-1);
+                    is_long_range_relocate = false;
+                    return true;
+                }
+                return false;
+            }
+            // Move towards
+            Navigator.MoveResult move_result = navigator.move(relocate_target);
+            switch (move_result) {
+                case SUCCESS:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+    }
 
     class LongRangeRelocate implements RelocateStrategy
     {
@@ -771,23 +778,36 @@ public class Archon extends RunnableBot
             MapLocation my_location = controller.getLocation();
             if (controller.getMode() == RobotMode.PORTABLE)
             {
-                if (relocate_target != null && controller.isLocationOccupied(relocate_target))
+                if (relocate_target != null && controller.canSenseLocation(relocate_target) && controller.isLocationOccupied(relocate_target))
                     rechoose = true;
                 else
                     return true;
             }
 
+
+
             //if (controller.getRoundNum() % 5 == 0)
             //	return false;
 
-            double current_score = calculateScore(my_location);
+            if (controller.getMode() == RobotMode.TURRET && !controller.canTransform()) {
+                return false;
+            }
+
+            if (!rechoose && num_relocating >= controller.getArchonCount() - 1) {
+                return false;
+            }
+
+            MapLocation closest_enemy = Communicator.getClosestFromCompressedLocationArray(Cache.opponent_soldier_compressed_locations,
+                    Cache.controller.getLocation());
+            double current_score = calculateScore(my_location,closest_enemy);
             if (current_score > -25 || needRepair() && !rechoose)
                 return false;
             double max_score = -2000000;
             MapLocation best = null;
+
             for (MapLocation potential : controller.getAllLocationsWithinRadiusSquared(my_location, controller.getType().visionRadiusSquared))
             {
-                double v = calculateScore(potential);
+                double v = calculateScore(potential,closest_enemy);
                 if (v > max_score)
                 {
                     max_score = v;
@@ -810,7 +830,7 @@ public class Archon extends RunnableBot
             return false;
         }
 
-        private double calculateScore(MapLocation location) throws GameActionException
+        private double calculateScore(MapLocation location, MapLocation enemy_loc) throws GameActionException
         {
             /*
             for (RobotInfo building : Cache.friendly_buildings) {
@@ -827,8 +847,6 @@ public class Archon extends RunnableBot
                 return -10000; // Probably shouldn't move
             }
             score = score - controller.senseRubble(location) - controller.getLocation().distanceSquaredTo(location) * 0.1;
-            MapLocation enemy_loc = Communicator.getClosestFromCompressedLocationArray(Cache.opponent_soldier_compressed_locations,
-                    Cache.controller.getLocation());
             if (enemy_loc == null)
                 enemy_loc = new MapLocation(Cache.MAP_WIDTH / 2, Cache.MAP_HEIGHT / 2);
             //System.out.printf("%s, %f - %d\n",location, score, Navigator.travelDistance(controller.getLocation(), enemy_loc));
@@ -846,6 +864,7 @@ public class Archon extends RunnableBot
         @Override
         public boolean relocate() throws GameActionException
         {
+            is_long_range_relocate = true;
             controller.setIndicatorLine(controller.getLocation(), relocate_target, 100, 100, 100);
             // Move
             if (!(controller.getMode() == RobotMode.PORTABLE))
@@ -865,6 +884,8 @@ public class Archon extends RunnableBot
                 if (controller.canTransform())
                 {
                     controller.transform();
+                    //controller.writeSharedArray(CommandCommunicator.MIGRATION_INDEX,num_relocating-1);
+                    is_long_range_relocate = false;
                     return true;
                 }
                 return false;
@@ -884,6 +905,7 @@ public class Archon extends RunnableBot
         miner_number = getRobotController().readSharedArray(CommandCommunicator.TOTAL_FARMER_INDEX);
         soldier_number = getRobotController().readSharedArray(CommandCommunicator.SOLDIER_INDEX);
         idle_miner_number = getRobotController().readSharedArray(CommandCommunicator.IDLE_FARMER_INDEX);
+        num_relocating = getRobotController().readSharedArray(CommandCommunicator.MIGRATION_INDEX);
 
         // Reset all
         if (CommandCommunicator.isLastArchon())
