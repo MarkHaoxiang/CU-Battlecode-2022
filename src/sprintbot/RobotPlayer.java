@@ -61,6 +61,7 @@ public strictfp class RobotPlayer
 			// This code runs during the entire lifespan of the robot, which is why it is in an infinite
 			// loop. If we ever leave this loop and return from run(), the robot dies! At the end of the
 			// loop, we call Clock.yield(), signifying that we've done everything we want to do.
+			
 			// Try/catch blocks stop unhandled exceptions, which cause your robot to explode.
 			try
 			{
@@ -79,9 +80,6 @@ public strictfp class RobotPlayer
 				// GameActionException, so it's more likely to be a bug in our code.
 				System.out.println(rc.getType() + " Exception");
 				e.printStackTrace();
-				if (Constants.DEBUG) {
-					controller.resign();
-				}
 			} finally
 			{
 				// Signify we've done everything we want to do, thereby ending our turn.

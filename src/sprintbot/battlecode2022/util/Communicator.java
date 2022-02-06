@@ -25,7 +25,8 @@ public class Communicator {
 		METAL, // Metal & no Miner around
 		FRIENDLY_MINER, // Our miner
 		SOLDIER, // Opponent Soldier or Sage or Watchtower
-		BUILDER_REQUEST
+		BUILDER_REQUEST,
+		OPPONENT_MINER
 	}
 
 	public static final Event[] events = {
@@ -33,7 +34,8 @@ public class Communicator {
 			Event.METAL,
 			Event.SOLDIER,
 			Event.FRIENDLY_MINER,
-			Event.BUILDER_REQUEST
+			Event.BUILDER_REQUEST,
+			Event.OPPONENT_MINER
 	};
 
 	public static void init(RobotController controller) {
@@ -64,6 +66,9 @@ public class Communicator {
 			case BUILDER_REQUEST:
 				event_num = 4;
 				break;
+			case OPPONENT_MINER:
+				event_num = 5;
+				break;
 			default: // won't happen
 				throw new IllegalStateException("Unexpected Event: " + event);
 		}
@@ -85,6 +90,8 @@ public class Communicator {
 			case BUILDER_REQUEST:
 				cache_array = Cache.builder_request_compressed_locations;
 				break;
+			case OPPONENT_MINER:
+				cache_array = Cache.opponent_miner_compressed_locations;
 			default:
 				throw new IllegalStateException("Unexpected value: " + event);
 		}

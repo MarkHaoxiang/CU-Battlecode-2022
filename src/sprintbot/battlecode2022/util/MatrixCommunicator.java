@@ -133,8 +133,13 @@ public class MatrixCommunicator extends Communicator {
 				break;
 			case SOLDIER:
 				Cache.opponent_soldier_compressed_locations = compressed_locations;
+				break;
 			case BUILDER_REQUEST:
 				Cache.builder_request_compressed_locations = compressed_locations;
+				break;
+			case OPPONENT_MINER:
+				Cache.opponent_miner_compressed_locations = compressed_locations;
+				break;
 		}
 	}
 

@@ -12,13 +12,14 @@ public class CommandCommunicator extends Communicator {
     private static MapLocation[] all_archon_spawn_locations = new MapLocation[4];
 
 
+
     /* Header Schema - first 16 bits
 
-    * Archon IDs
-    * Goal: For spawned units to identify memory location
-    * N number of icons. Stores ID of max 3 archons. Naturally sorted
-    * 10 ^ 3 < 1024 : 10 bits allocated
-    */
+     * Archon IDs
+     * Goal: For spawned units to identify memory location
+     * N number of icons. Stores ID of max 3 archons. Naturally sorted
+     * 10 ^ 3 < 1024 : 10 bits allocated
+     */
 
     /**
      * Runs on turn 0 to transmit archon ID to header
@@ -100,24 +101,26 @@ public class CommandCommunicator extends Communicator {
     public static final int MIGRATION_INDEX = 12;
 
     /* Global Data Schema
-    *  2 - Build order
-    *  3 - Desired bank
-    *  4 - Lab number
-    *  5 - Soldier number
-    *  6 - Idle farmer number
-    *  7 - Income
-    *  8 - Total farmer number
-    *  9 - Sage number
-    *  10 - Watch tower number
-    *  11 - Smooth income
-    *  12 - Migration number
-    * */
+     *  2 - Build order
+     *  3 - Desired bank
+     *  4 - Lab number
+     *  5 - Soldier number
+     *  6 - Idle farmer number
+     *  7 - Income
+     *  8 - Total farmer number
+     *  9 - Sage number
+     *  10 - Watch tower number
+     *  11 - Smooth income
+     *  12 - Migration number
+     *  13 - Lead spent on gold
+     *  14 - First contact
+     * */
 
     // TODO: Implement Priority Schema
 
     /* Dead Man's Switch Schema
-    * Alternating bit for other robots to check if archon is alive
-    */
+     * Alternating bit for other robots to check if archon is alive
+     */
 
     public static void deadManSwitch() throws GameActionException {
         if (controller.getType() != RobotType.ARCHON) {
@@ -130,16 +133,32 @@ public class CommandCommunicator extends Communicator {
         } else {
             controller.writeSharedArray(bit_id,0);
         }
-        controller.writeSharedArray(bit_id + 1, 0);
+
+
+        // Danger switch,
+        if (Cache.opponent_soldiers.length + Cache.opponent_buildings.length > 0) {
+            controller.writeSharedArray(bit_id + 1, 1 << (BITS_PER_INTEGER - 2));
+        }
+        else {
+            controller.writeSharedArray(bit_id + 1, 0);
+        }
+    }
+
+    public static boolean archonInDanger(int aid) throws GameActionException {
+        int v = controller.readSharedArray(aid * 2 + 1 + HEADER_PRIORITY_OFFSET);
+        if ((v & (1 << (BITS_PER_INTEGER - 2))) > 0) {
+            return true;
+        }
+        return false;
     }
 
     /* Spawn Schema
-    * 15th - 22nd
-    * Each archon allocated 31 bits to transfer commands to newly spawned units
-    * 3 bits role identifier (eg. farmer, defender, attacker, wall etc)
-    * 12 bits uncompressed map location
-    * 12 bits spawn location
-    */
+     * 15th - 22nd
+     * Each archon allocated 31 bits to transfer commands to newly spawned units
+     * 3 bits role identifier (eg. farmer, defender, attacker, wall etc)
+     * 12 bits uncompressed map location
+     * 12 bits spawn location
+     */
 
     // Rename as fit
     public enum RobotRole {
@@ -237,6 +256,7 @@ public class CommandCommunicator extends Communicator {
 
             if (spawn_location - 1 == (my_location.x << 6) + my_location.y) {
                 // Found the archon
+                archon_id = archon;
                 int value = controller.readSharedArray(HEADER_PRIORITY_OFFSET + archon * 2);
                 if ((value&0b111111) == 0) {
                     System.out.println("No spawn message. Theres a bug.");
@@ -306,7 +326,7 @@ public class CommandCommunicator extends Communicator {
                 continue;
             } else if (
                     (archon>archon_id && (v1 >> (BITS_PER_INTEGER - 1)) == (controller.getRoundNum() & 1)) ||
-                    (archon<archon_id && (v1 >> (BITS_PER_INTEGER - 1)) != (controller.getRoundNum() & 1))
+                            (archon<archon_id && (v1 >> (BITS_PER_INTEGER - 1)) != (controller.getRoundNum() & 1))
             ) {
                 // Dead friendly archon but unlabelled
                 //System.out.println("NEW DEAD FRIENDLY?");

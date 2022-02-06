@@ -26,7 +26,6 @@ public class IntegratedNavigator extends Navigator
 			isRestricted = true;
 		}
 
-		/*
 		switch (controller.getType().visionRadiusSquared)
 
 		{
@@ -47,9 +46,6 @@ public class IntegratedNavigator extends Navigator
 						controller.getType().visionRadiusSquared);
 				break;
 		}
-		 */
-		dpNavigator = new DPR20Navigator(controller);
-		dpBytecodeCostUpperBound = 5500;
 	}
 
 	private void pickNavigator(MapLocation target_location, boolean overrideLimit) throws GameActionException
@@ -102,12 +98,15 @@ public class IntegratedNavigator extends Navigator
 
 		MapLocation current_location = controller.getLocation();
 
-		controller.setIndicatorLine(current_location,target_location,200,105,125);
+		//controller.setIndicatorLine(current_location,target_location,200,105,125);
 		// Is target out of the map
 		if (target_location == null ||
 				!controller.onTheMap(current_location.add(
 						current_location.directionTo(
-								target_location)))) return MoveResult.IMPOSSIBLE;
+								target_location)))) {
+			return MoveResult.IMPOSSIBLE;
+		}
+
 
 		// At destination
 		if (target_location.equals(current_location)) {
@@ -125,8 +124,7 @@ public class IntegratedNavigator extends Navigator
 				return MoveResult.IMPOSSIBLE;
 			}
 			if (robot != null
-					&& robot.getType().isBuilding()
-					&& robot.getMode().canMove == false) {
+					&& robot.getMode() == RobotMode.TURRET) {
 				return MoveResult.IMPOSSIBLE;
 			}
 		}

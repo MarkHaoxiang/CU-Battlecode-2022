@@ -5,6 +5,7 @@ import sprintbot.RunnableBot;
 import sprintbot.battlecode2022.util.*;
 
 import java.awt.*;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Random;
 
@@ -265,23 +266,27 @@ public class Archon extends RunnableBot
             }
         }
 
+        int[] labs_direction = new int[8];
         private void buildLab() throws GameActionException
         {
             // Lab strategy
             // TODO: Maintain minimum distance
             int lab = controller.readSharedArray(CommandCommunicator.LAB_INDEX);
-
-            if (smoothed_income - lab * 10 > 8
-                    //&& (soldier_number >= 2 + lab * 6)
-                    && (miner_number >= 4 + lab * 4)
+            if (smoothed_income - lab * 8 > 0
+                    // && (soldier_number >= 1)
+                    && (miner_number >= 2 + lab * 6)
                     && (team_lead >= 40)
-                    && (closestSoldierLocation[my_archon_id] == null || distanceToClosestSoldier[my_archon_id] > 10))
+                    && (Cache.opponent_soldiers.length + Cache.opponent_villagers.length + Cache.opponent_buildings.length == 0)
+                    && (closestSoldierLocation[my_archon_id] == null || distanceToClosestSoldier[my_archon_id] > 6))
             {
                 MapLocation my_location = controller.getLocation();
                 MapLocation best = null;
+                Direction best_direction = null;
                 int best_score = -9999;
                 for (Direction direction : Constants.DIRECTIONS) {
                     MapLocation potential = my_location.translate(direction.dx*LAB_DISTANCE,direction.dy*LAB_DISTANCE);
+                    potential = new MapLocation(Math.max(0, potential.x),Math.max(0, potential.y));
+                    potential = new MapLocation(Math.min(Cache.MAP_WIDTH-1, potential.x),Math.min(Cache.MAP_HEIGHT-1, potential.y));
                     if (navigator.inMap(potential)) {
                         int score = 0;
                         if (closestSoldierLocation[my_archon_id] != null) {
@@ -290,15 +295,19 @@ public class Archon extends RunnableBot
                         else {
                             score = -navigator.distanceToEdge(potential);
                         }
+                        score -= labs_direction[Navigator.directionToInt(direction)] * 1;
                         if (score > best_score) {
                             best_score = score;
                             best = potential;
+                            best_direction = direction;
                         }
                     }
                 }
 
                 if (best != null) {
+                    System.out.println(best);
                     if (tryBuild(RobotType.BUILDER, CommandCommunicator.RobotRole.LAB_BUILDER,best)) {
+                        labs_direction[Navigator.directionToInt(best_direction)] += 1;
                         controller.writeSharedArray(CommandCommunicator.LAB_INDEX,lab+1);
                         controller.writeSharedArray(CommandCommunicator.BANK_INDEX,  controller.readSharedArray(CommandCommunicator.BANK_INDEX)+180);
                     }
@@ -478,7 +487,7 @@ public class Archon extends RunnableBot
                 return false;
             }
 
-            if (controller.getHealth() < 300 && !Cache.friendly_builder) {
+            if (controller.getHealth() < 300 && !Cache.friendly_builder && Cache.friendly_soldiers.length >= Cache.opponent_soldiers.length) {
                 tryBuild(RobotType.BUILDER);
             }
 
@@ -533,7 +542,7 @@ public class Archon extends RunnableBot
             }
 
 
-            if (controller.getRoundNum() > 5) {
+            if (controller.getRoundNum() > 1) {
                 if (CommandCommunicator.isLastArchon()) {
                     buildLab();
                 }
@@ -545,6 +554,15 @@ public class Archon extends RunnableBot
                 }
             }
 
+            /*
+            System.out.println(my_archon_id);
+            if (CommandCommunicator.isLastArchon()) {
+                for (double i : distanceToClosestSoldierAdjusted) {
+                    System.out.println(i);
+                }
+            }
+
+             */
 
             selfMutate();
 
@@ -560,26 +578,38 @@ public class Archon extends RunnableBot
                     my_ranking++;
                 }
             }
-            if (buildSage()) return true;
 
+            if (is_peaceful) {
+                if (miner_number >= 4 && soldier_number == 0) {
+                    return tryBuild(RobotType.SOLDIER);
+                }
+                return tryBuild(RobotType.MINER);
+            }
             switch (team_build_order)
             {
                 case 0: // Miner, anyone can build tbh
+                    if (buildSage()) return true;
                     if (Cache.opponent_soldiers.length > 0 && miner_number >= soldier_number) {
                         return buildSoldier();
                     }
                     return buildMiner();
                 case 1:
                     if (Cache.opponent_soldiers.length > 0) {
+                        if (buildSage()) return true;
                         return buildSoldier();
                     }
                     return buildMiner();
                 case 2:
                 case 4: // Soldier
-                    if (is_peaceful) return buildMiner();
+                    if (buildSage()) {
+                        getRobotController().writeSharedArray(TEAM_BUILD_ORDER_INDEX, (team_build_order + 1) % 5);
+                        return true;
+                    }
                     return buildSoldier();
                 case 3: // Farmer or miner
-                    if (is_peaceful) return buildMiner();
+                    if (buildSage()) {
+                        return true;
+                    }
                     if (Cache.opponent_soldiers.length > 0) {
                         return buildSoldier();
                     }
@@ -588,7 +618,7 @@ public class Archon extends RunnableBot
                         return buildMiner();
                     }
                     return buildFarmer();
-                default: if (is_peaceful) return buildMiner();
+                default:
                     System.out.println("BUGGGGG Spawn");
             }
             return false;
@@ -675,6 +705,10 @@ public class Archon extends RunnableBot
             }
 
             if (num_relocating >= controller.getArchonCount() - 1) {
+                return false;
+            }
+
+            if (Cache.opponent_soldiers.length >= 0) {
                 return false;
             }
 
@@ -783,8 +817,6 @@ public class Archon extends RunnableBot
                 else
                     return true;
             }
-
-
 
             //if (controller.getRoundNum() % 5 == 0)
             //	return false;
@@ -931,7 +963,7 @@ public class Archon extends RunnableBot
         int save = Math.min(500,getRobotController().readSharedArray(CommandCommunicator.BANK_INDEX));
         int money = getRobotController().getTeamLeadAmount(Cache.OUR_TEAM) - save;
 
-        if (money < type.buildCostLead)
+        if (money < type.buildCostLead && !is_peaceful && Cache.opponent_soldiers.length == 0 && (team_total_soldiers > 0 || type != RobotType.SOLDIER))
         {
             return false;
         }
@@ -978,16 +1010,17 @@ public class Archon extends RunnableBot
             if (getRobotController().onTheMap(loc))
             {
                 int score = -getRobotController().senseRubble(loc);
-                if (type == RobotType.MINER && Cache.lead_spots.length > 0)
+                if (type == RobotType.MINER && Cache.lead_spots.length > 0 && getRobotController().getRoundNum() < 500)
                 {
                     for (MapLocation lead : Cache.lead_spots)
                     {
                         int v = getRobotController().senseLead(lead);
                         if (v > Miner.LEAD_MINE_THRESHOLD && getRobotController().getLocation().directionTo(lead) == dir)
                         {
-                            score = score - 10 * Navigator.travelDistance(loc, lead) + (v - Miner.LEAD_MINE_THRESHOLD) / 5;
+                            score = score + 10 * (6-Navigator.travelDistance(loc, lead));
                             break;
                         }
+
                     }
                 }
                 if (score > highest)

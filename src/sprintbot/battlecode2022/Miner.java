@@ -6,6 +6,7 @@ import sprintbot.battlecode2022.util.Communicator;
 import sprintbot.battlecode2022.util.Navigator;
 import sprintbot.RunnableBot;
 import sprintbot.battlecode2022.util.*;
+import sprintbot.battlecode2022.util.navigation.IntegratedNavigator;
 
 import java.util.*;
 
@@ -159,7 +160,7 @@ public class Miner extends RunnableBot
 				for (MapLocation lead_spot : Cache.lead_spots) {
 					int d = Navigator.travelDistance(my_location,lead_spot);
 					int lead_amt = getRobotController().senseLead(lead_spot);
-					if (lead_amt <= LEAD_MINE_THRESHOLD) {
+					if (lead_amt <= LEAD_MINE_THRESHOLD && (Cache.MY_SPAWN_LOCATION.distanceSquaredTo(my_location) < 81 || Cache.opponent_villagers.length <= Cache.friendly_villagers.length + 1)) {
 						// Not enough lead
 						continue;
 					}
@@ -270,7 +271,7 @@ public class Miner extends RunnableBot
 								return true;
 							}
 						}
-						if (Cache.lead_spots.length <= 4) {
+						if (Cache.lead_spots.length <= 3) {
 							return true;
 						}
 						state = MinerState.MINING;
@@ -339,7 +340,7 @@ public class Miner extends RunnableBot
 			if (mine_locations.length > 0) {
 				for (MapLocation lead_spot : mine_locations) {
 					if (!getRobotController().canSenseLocation(lead_spot)) continue;
- 					int lead_amount = getRobotController().senseLead(lead_spot);
+					int lead_amount = getRobotController().senseLead(lead_spot);
 					//mine_potential += lead_amount;
 					if (lead_amount <= LEAD_MINE_THRESHOLD) {
 						// Not enough lead
@@ -381,6 +382,10 @@ public class Miner extends RunnableBot
 				}
 			}
 			else {
+				if (Cache.lead_spots.length == 0) {
+					close();
+					state = MinerState.SEARCHING;
+				}
 				return false;
 			}
 		}
@@ -414,6 +419,7 @@ public class Miner extends RunnableBot
 
 		@Override
 		public boolean move() throws GameActionException {
+			CommandCommunicator.updateArchonLocations();
 			search_moving_strategy.move_target = null;
 			RobotController controller = getRobotController();
 			Direction direction = null;
@@ -435,7 +441,29 @@ public class Miner extends RunnableBot
 					controller.disintegrate();
 					return true;
 				}
-				if (navigator.move(Cache.MY_SPAWN_LOCATION) == Navigator.MoveResult.SUCCESS) return true;
+
+				Navigator.MoveResult move_result = ((IntegratedNavigator)navigator).move(Cache.MY_SPAWN_LOCATION,true);
+				switch (move_result) {
+					case SUCCESS:
+						return true;
+					case FAIL:
+						return false;
+					case REACHED:
+					case IMPOSSIBLE:
+						controller.setIndicatorDot(getRobotController().getLocation(),0,0,0);
+						MapLocation close = null;
+						for (MapLocation archon : CommandCommunicator.getSpawnLocations()) {
+							if (archon != null ) {
+								if (close == null || close.distanceSquaredTo(getRobotController().getLocation()) > archon.distanceSquaredTo(getRobotController().getLocation())) {
+									close = archon;
+								}
+							}
+						}
+						if (close != null) {
+							Cache.MY_SPAWN_LOCATION = close;
+						}
+						return false;
+				}
 
 			}
 
@@ -474,7 +502,10 @@ public class Miner extends RunnableBot
 						Cache.controller.mineGold(mineLocation);
 					while (Cache.controller.canMineLead(mineLocation)
 							&& ((Cache.controller.senseLead(mineLocation) > LEAD_MINE_THRESHOLD)
-							|| (Cache.controller.senseLead(mineLocation) > 0 && Cache.opponent_soldiers.length > Cache.friendly_soldiers.length))) {
+							|| (Cache.controller.senseLead(mineLocation) > 0 && Cache.opponent_soldiers.length > Cache.friendly_soldiers.length && !Cache.can_see_archon)
+							|| (Cache.controller.senseLead(mineLocation) > 0
+								&& ((Cache.opponent_villagers.length > Cache.friendly_villagers.length + 1 || Cache.opponent_buildings.length > Cache.friendly_buildings.length) && Cache.friendly_soldiers.length < 2)
+							&& Cache.MY_SPAWN_LOCATION.distanceSquaredTo(getRobotController().getLocation())>81))) {
 						Cache.controller.mineLead(mineLocation);
 						income += 1;
 					}

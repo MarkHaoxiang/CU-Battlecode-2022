@@ -1,9 +1,11 @@
 package sprintbot.battlecode2022;
 
-		import battlecode.common.*;
-		import sprintbot.RunnableBot;
-		import sprintbot.battlecode2022.util.*;
-		import sprintbot.battlecode2022.util.navigation.IntegratedNavigator;
+import battlecode.common.*;
+import sprintbot.RunnableBot;
+import sprintbot.battlecode2022.util.*;
+import sprintbot.battlecode2022.util.navigation.IntegratedNavigator;
+
+import java.awt.*;
 
 public class Soldier extends RunnableBot
 {
@@ -53,17 +55,30 @@ public class Soldier extends RunnableBot
 		@Override
 		public boolean move() throws GameActionException
 		{
-
-
-			// Go for nearby soldiers first
 			MapLocation my_location = getRobotController().getLocation();
-			MapLocation potential_target = Communicator.getClosestFromCompressedLocationArray(Cache.opponent_soldier_compressed_locations,
+
+			// Miners priority
+
+			MapLocation potential_target = Communicator.getClosestFromCompressedLocationArray(Cache.opponent_miner_compressed_locations,
 					Cache.controller.getLocation());
 			if (potential_target != null
 					&& potential_target != my_location) {
 				move_target = potential_target;
 				is_random = false;
 			}
+
+			// And then soldiers
+			if (is_random || move_target == null) {
+				potential_target = Communicator.getClosestFromCompressedLocationArray(Cache.opponent_soldier_compressed_locations,
+						Cache.controller.getLocation());
+				if (potential_target != null
+						&& potential_target != my_location) {
+					move_target = potential_target;
+					is_random = false;
+				}
+			}
+
+
 			// And then opponent archons
 			if (is_random || move_target == null) {
 				potential_target = Communicator.getClosestFromCompressedLocationArray(Cache.opponent_archon_compressed_locations,
@@ -79,9 +94,8 @@ public class Soldier extends RunnableBot
 			{
 				is_random = true;
 				move_target = new MapLocation(Cache.MAP_WIDTH / 2, Cache.MAP_HEIGHT / 2);
-				if (move_target.distanceSquaredTo(Cache.MY_SPAWN_LOCATION) > 35)
-				{
-					double k = 35 * 1.0 / move_target.distanceSquaredTo(Cache.MY_SPAWN_LOCATION);
+				if (Navigator.travelDistance(Cache.MY_SPAWN_LOCATION,move_target) > Math.max(Cache.MAP_HEIGHT,Cache.MAP_WIDTH) / 2) {
+					double k = Math.pow(Math.max(Cache.MAP_HEIGHT,Cache.MAP_WIDTH) / 2,2) * 1.0 / move_target.distanceSquaredTo(Cache.MY_SPAWN_LOCATION);
 					int dx = (int) (k * (move_target.x - Cache.MY_SPAWN_LOCATION.x));
 					int dy = (int) (k * (move_target.y - Cache.MY_SPAWN_LOCATION.y));
 					move_target = new MapLocation(Cache.MY_SPAWN_LOCATION.x + dx, Cache.MY_SPAWN_LOCATION.y + dy);
@@ -98,6 +112,7 @@ public class Soldier extends RunnableBot
 					// Nothing here, go somewhere else
 					MatrixCommunicator.update(Communicator.Event.SOLDIER,my_location,false);
 					MatrixCommunicator.update(Communicator.Event.ARCHON,my_location,false);
+					MatrixCommunicator.update(Communicator.Event.OPPONENT_MINER,my_location,false);
 					move_target = null;
 					return false;
 				case IMPOSSIBLE:
@@ -192,7 +207,7 @@ public class Soldier extends RunnableBot
 			if (!Cache.can_see_archon) {
 				RobotController controller = getRobotController();
 				//if (controller.getHealth() < HP_THRESHOLD || (controller.getHealth() <= Cache.lowest_health_soldier && Cache.can_see_archon)) {
-				if (health < HP_THRESHOLD) {
+				if (Cache.opponent_soldiers.length + Cache.opponent_villagers.length + Cache.opponent_buildings.length > 0 && health < HP_THRESHOLD) {
 					return true;
 				}
 			}
@@ -203,7 +218,7 @@ public class Soldier extends RunnableBot
 				if (health > 15 && Cache.injured > 3) {
 					return false;
 				}
-				MatrixCommunicator.update(Communicator.Event.SOLDIER,getRobotController().getLocation(),false);
+				//MatrixCommunicator.update(Communicator.Event.SOLDIER,getRobotController().getLocation(),false);
 				return true;
 			}
 			return false;
@@ -247,9 +262,21 @@ public class Soldier extends RunnableBot
 					}
 				}
 				else if (Cache.opponent_villagers.length > 0) {
-					move_target = Cache.opponent_villagers[0].getLocation();
+					int score = -9999;
+					MapLocation lowest = null;
+					for (RobotInfo robot : Cache.opponent_villagers) {
+						int s = -robot.getHealth() + controller.senseRubble(robot.getLocation());
+						if (s > score) {
+							lowest = robot.getLocation();
+							score = s;
+						}
+					}
+
+					move_target = lowest;
+					controller.setIndicatorDot(lowest,255,0,255);
+
 					if (move_target.distanceSquaredTo(my_location) > 2) {
-						Navigator.MoveResult move_result = navigator.move(move_target);
+						Navigator.MoveResult move_result = ((IntegratedNavigator)navigator).move(move_target,true);
 						if (move_result == Navigator.MoveResult.SUCCESS) {
 							return true;
 						}
@@ -343,8 +370,7 @@ public class Soldier extends RunnableBot
 					else {
 						score = expected_damage - expected_damage_from_opponents;
 					}
-					//System.out.println(location);
-					//System.out.println(score);
+
 					if (score > best_score) {
 						best_score = score;
 						best_location = location;
@@ -436,9 +462,12 @@ public class Soldier extends RunnableBot
 			for (RobotInfo robot : Cache.opponent_buildings) {
 				if (getRobotController().canAttack(robot.getLocation())) {
 					lowest_location = robot.location;
-					break;
+					if (robot.getType() == RobotType.LABORATORY) {
+						break;
+					}
 				}
 			}
+
 			if (lowest_location != null) {
 				Cache.controller.attack(lowest_location);
 				return true;
@@ -446,9 +475,12 @@ public class Soldier extends RunnableBot
 
 			int lowest = 999999;
 			for (RobotInfo robot : Cache.opponent_villagers) {
-				if (robot.health < lowest && getRobotController().canAttack(robot.getLocation())) {
-					lowest = robot.health;
-					lowest_location = robot.location;
+				if (getRobotController().canSenseLocation(robot.getLocation())) {
+					int s = robot.health - getRobotController().senseRubble(robot.getLocation()) / 2;
+					if (s < lowest && getRobotController().canAttack(robot.getLocation())) {
+						lowest = s;
+						lowest_location = robot.location;
+					}
 				}
 			}
 			if (lowest_location != null) {
@@ -479,18 +511,30 @@ public class Soldier extends RunnableBot
 			getRobotController().setIndicatorString("Fight");
 		}
 		else {
-			if ((Cache.age & 1) == 1) {
-				MatrixCommunicator.read(Communicator.Event.ARCHON);
+			if ((Cache.age % 3) == 0) {
+				MatrixCommunicator.read(Communicator.Event.SOLDIER);
+			}
+			else if ((Cache.age % 3 == 1)) {
+				MatrixCommunicator.read(Communicator.Event.OPPONENT_MINER);
 			}
 			else {
-				MatrixCommunicator.read(Communicator.Event.SOLDIER);
+				MatrixCommunicator.read(Communicator.Event.ARCHON);
 			}
 			getRobotController().setIndicatorString("Search");
 			current_moving_strategy = search_moving_strategy;
 		}
 
-		if (getRobotController().isActionReady() && Cache.opponent_soldiers.length > 0) {
-			current_attacking_strategy.attack();
+		if (getRobotController().isActionReady()) {
+			boolean should_attack = false;
+			for (RobotInfo soldier : Cache.opponent_soldiers) {
+				if (soldier.getLocation().isWithinDistanceSquared(getRobotController().getLocation(),RobotType.SOLDIER.actionRadiusSquared)) {
+					should_attack = true;
+					break;
+				}
+			}
+			if (should_attack) {
+				current_attacking_strategy.attack();
+			}
 		}
 
 		if (getRobotController().isMovementReady()) {

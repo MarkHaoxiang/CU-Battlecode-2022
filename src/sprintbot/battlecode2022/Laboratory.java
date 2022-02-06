@@ -25,15 +25,14 @@ public class Laboratory extends RunnableBot {
 
         int num_lab = getRobotController().readSharedArray(CommandCommunicator.LAB_INDEX);
         double smooth_income = getRobotController().readSharedArray(CommandCommunicator.SMOOTH_INCOME) / 100.0;
-        double expenditurePerTurn = smooth_income / 2 / num_lab;
+
+
+        double expenditurePerTurn = smooth_income  / num_lab * 0.8;
 
         //System.out.println(num_lab);
         //System.out.println(smooth_income / 100.0 / num_lab);
 
         cash += expenditurePerTurn;
-        if (cash > 15) {
-            cash = 15;
-        }
 
         if (getRobotController().canTransmute() && cash >= getRobotController().getTransmutationRate()) {
             getRobotController().transmute();
@@ -41,6 +40,9 @@ public class Laboratory extends RunnableBot {
             total_expenditure += getRobotController().getTransmutationRate() - (int)Math.floor(20.0-18.0*Math.exp(-0.02*(Cache.friendly_villagers.length+Cache.friendly_buildings.length+Cache.friendly_soldiers.length)));
             total_potential_savings += getRobotController().getTransmutationRate() - (int)Math.floor(20.0-18.0*Math.exp(-0.01*(Cache.friendly_villagers.length+Cache.friendly_buildings.length+Cache.friendly_soldiers.length)));
         }
+
+
+
         Cache.unit_scout_routine();
 
        //System.out.println(total_expenditure);

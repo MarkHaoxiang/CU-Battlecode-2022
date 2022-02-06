@@ -50,6 +50,11 @@ public class Sage extends RunnableBot {
         public boolean move() throws GameActionException
         {
 
+            // Might have just left range
+            if (!getRobotController().isActionReady()) {
+                return false;
+            }
+
             // Go for nearby soldiers first
             MapLocation my_location = getRobotController().getLocation();
             MapLocation potential_target = Communicator.getClosestFromCompressedLocationArray(Cache.opponent_soldier_compressed_locations,
@@ -82,7 +87,6 @@ public class Sage extends RunnableBot {
 
             Navigator.MoveResult move_result = navigator.move(move_target);
 
-
             switch (move_result) {
                 case SUCCESS:
                     //getRobotController().setIndicatorString("SUCCESS");
@@ -91,11 +95,12 @@ public class Sage extends RunnableBot {
                     // Nothing here, go somewhere else
                     MatrixCommunicator.update(Communicator.Event.SOLDIER,my_location,false);
                     MatrixCommunicator.update(Communicator.Event.ARCHON,my_location,false);
+                    MatrixCommunicator.update(Communicator.Event.OPPONENT_MINER,my_location,false);
                     move_target = null;
                     return false;
                 case IMPOSSIBLE:
                     //getRobotController().setIndicatorString("IMPOSSIBLE");
-                    if (Navigator.travelDistance(my_location,move_target) <= 4) {
+                    if (Navigator.travelDistance(my_location,move_target) <= 8) {
                         MatrixCommunicator.update(Communicator.Event.SOLDIER,move_target,false);
                     }
                     move_target = navigator.randomLocation();
@@ -127,13 +132,15 @@ public class Sage extends RunnableBot {
             double my_expected_damage = 0;
 
             int max_health_in_range = 0;
-            double damage_from_abyss = 0;
-            int kills_from_abyss = 0;
+            double damage_from_envision = 0;
+            int envision_potential_kills = 0;
+            int envision_bonus = 0;
+
             int distance_to_closest = 9999;
 
             if (location.equals(my_location)
                     || controller.canMove(my_location.directionTo(location))
-                    || !controller.isMovementReady()) { // !ismovementready for attackStrategy to use. Careful
+                    || (!controller.isMovementReady() && !controller.isLocationOccupied(location))) { // !ismovementready for attackStrategy to use. Careful
                 for (RobotInfo robot : Cache.opponent_soldiers) {
                     MapLocation robot_location = robot.getLocation();
                     int distance_to_robot = robot_location.distanceSquaredTo(location);
@@ -157,9 +164,12 @@ public class Sage extends RunnableBot {
                         }
                         in_range = true;
                         int potential_damage = (int) (robot.getType().getMaxHealth(1) * 0.22);
-                        damage_from_abyss += potential_damage;
-                        if (potential_damage > robot.getHealth()) {
-                            kills_from_abyss += 1;
+                        damage_from_envision += potential_damage;
+                        if (robot.getHealth() % RobotType.SAGE.damage < robot.getType().getMaxHealth(robot.getLevel()) * 0.22) {
+                            envision_bonus += 1;
+                            if (potential_damage > robot.getHealth()) {
+                                envision_potential_kills += 1;
+                            }
                         }
                     }
                 }
@@ -169,11 +179,11 @@ public class Sage extends RunnableBot {
                 double base_cooldown = controller.getType().actionCooldown;
                 double cooldown_rubble = ((1.0 + rubble / 10.0) * base_cooldown / 10.0);
                 my_expected_damage = damage / cooldown_rubble;
-
+                damage_from_envision = damage_from_envision / cooldown_rubble;
 
                 // Calculate score
                 double score = 0;
-                if (!opponent_in_my_vision) {
+                if (!opponent_in_my_vision && controller.isActionReady()) {
                     score = -10;
                 }
 
@@ -185,7 +195,10 @@ public class Sage extends RunnableBot {
                     ;
                     score -= expected_damage_from_opponents;
                 } else {
-                    score = Math.max(my_expected_damage, damage_from_abyss / base_cooldown);
+                    //score = Math.max(my_expected_damage, damage_from_abyss / base_cooldown);
+                    double score_attack = my_expected_damage;
+                    double score_envision = damage_from_envision + ((envision_bonus - 1) * 2 * base_cooldown) / cooldown_rubble + base_cooldown * envision_potential_kills * 0.5 / cooldown_rubble;
+                    score = Math.max(score_attack,score_envision);
                 }
                 return score;
             }
@@ -200,6 +213,37 @@ public class Sage extends RunnableBot {
 
             double best_score = -9999.0;
             MapLocation best_location = null;
+
+            // Not attacking soldier
+            if (Cache.opponent_soldiers.length == 0) {
+                // Prioritize buildings
+                if (Cache.opponent_buildings.length > 0) {
+                    if (!my_location.isWithinDistanceSquared(Cache.opponent_buildings[0].getLocation(),
+                            RobotType.SOLDIER.actionRadiusSquared)) {
+                        move_target = Cache.opponent_buildings[0].getLocation();
+                        Navigator.MoveResult move_result = navigator.move(move_target);
+                        if (move_result == Navigator.MoveResult.SUCCESS) {
+                            return true;
+                        }
+                        return false;
+                    }
+                }
+
+                if (Cache.opponent_villagers.length > 0) {
+                    if (!my_location.isWithinDistanceSquared(Cache.opponent_villagers[0].getLocation(),
+                            RobotType.SOLDIER.actionRadiusSquared)) {
+                        move_target = Cache.opponent_villagers[0].getLocation();
+                        if (getRobotController().getLocation().distanceSquaredTo(move_target) > RobotType.SAGE.actionRadiusSquared) {
+                            Navigator.MoveResult move_result = navigator.move(move_target);
+                            if (move_result == Navigator.MoveResult.SUCCESS) {
+                                return true;
+                            }
+                            return false;
+                        }
+                    }
+                }
+
+            }
 
             // Heuristics
 
@@ -232,24 +276,24 @@ public class Sage extends RunnableBot {
     class RetreatMoveStrategy implements MoveStrategy
     {
 
-        int HP_THRESHOLD = 46;
+        int HP_THRESHOLD = 23;
         @Override
         public boolean move() throws GameActionException
         {
 
             CommandCommunicator.updateArchonLocations();
-                RobotController controller = getRobotController();
-                // Greedy move away
-                if (Cache.can_see_archon)
+            RobotController controller = getRobotController();
+            // Greedy move away
+            if (Cache.can_see_archon)
+            {
+                for (RobotInfo robot : Cache.friendly_buildings)
                 {
-                    for (RobotInfo robot : Cache.friendly_buildings)
+                    if (robot.getType() == RobotType.ARCHON && robot.getLocation().isWithinDistanceSquared(controller.getLocation(), 8))
                     {
-                        if (robot.getType() == RobotType.ARCHON && robot.getLocation().isWithinDistanceSquared(controller.getLocation(), 8))
-                        {
-                            return false;
-                        }
+                        return false;
                     }
                 }
+            }
 
             Navigator.MoveResult move_result = ((IntegratedNavigator)navigator).move(Cache.MY_SPAWN_LOCATION,true);
             switch (move_result) {
@@ -273,7 +317,7 @@ public class Sage extends RunnableBot {
                     }
                     return false;
             }
-                return false;
+            return false;
         }
 
         public boolean shouldRun () throws GameActionException
@@ -326,10 +370,8 @@ public class Sage extends RunnableBot {
 
             int droids = 0;
 
-
-
             // Save attack for better spot?
-            if (!has_moved && controller.getHealth() < 50 && controller.getActionCooldownTurns() / 10 < 2) {
+            if (!has_moved && controller.getHealth() > 50 && controller.getActionCooldownTurns() / 10 < 2) {
                 double current_score = fight_move_strategy.calculateScore(my_location);
                 for (MapLocation potential : navigator.adjacentLocationWithCenter(my_location)) {
                     if (fight_move_strategy.calculateScore(potential) > current_score + WAIT_SCORE_THRESHOLD) {
@@ -338,42 +380,48 @@ public class Sage extends RunnableBot {
                 }
             }
 
+            int area_bonus = 0;
 
             RobotInfo best = null;
             MapLocation best_attack = null;
             int best_score = -9999;
             for (RobotInfo robot : robots) {
-
                 int score = 0;
                 switch (robot.getType()) {
                     case SOLDIER:
                     case SAGE:
                         droids += 2;
+                        if (robot.getHealth() % RobotType.SAGE.damage < robot.getType().getMaxHealth(robot.getLevel()) * 0.22) {
+                            area_bonus += 1;
+                        }
                     case WATCHTOWER:
-                        score += 5;
+                        score += 2;
                         if (robot.getLocation().isWithinDistanceSquared(my_location, robot.getType().visionRadiusSquared)) {
                             score += 5;
                         }
                         if (robot.getLocation().isWithinDistanceSquared(my_location, robot.getType().actionRadiusSquared)) {
                             score += 5;
                         }
+                        if (robot.getHealth() <= 45) {
+                            score += 4; // Kill bonus
+                            if (robot.getType() == RobotType.SAGE) {
+                                score += 4;
+                                score -= 0.1 * (45 - robot.getHealth());
+                            }
+                        }
                         break;
                     case ARCHON:
                     case LABORATORY:
-                        score += 4;
+                        score += 13;
                         break;
                     case BUILDER:
                         droids += 1;
-                        score += 3;
+                        score += 5;
                         break;
                     case MINER:
                         droids += 1;
-                        score += 2;
+                        score += 13;
                         break;
-                }
-                if (robot.getHealth() <= 45) {
-                    score += 4; // Kill bonus
-                    score -= 0.3 * (45 - robot.getHealth()); // Overkill penalty
                 }
 
                 if (score > best_score) {
@@ -383,7 +431,8 @@ public class Sage extends RunnableBot {
                 }
             }
 
-            if (droids >= 10) {
+
+            if (droids >= 10 || area_bonus > 1) {
                 controller.envision(AnomalyType.CHARGE);
                 return true;
             }
@@ -391,6 +440,9 @@ public class Sage extends RunnableBot {
             if (best_attack != null && controller.canAttack(best_attack)) {
                 if (!best.getType().isBuilding() && best.getHealth() < best.getType().getMaxHealth(best.getLevel()) * 0.22) {
                     controller.envision(AnomalyType.CHARGE);
+                }
+                else if (best.getType() == RobotType.ARCHON && !Cache.can_see_archon) {
+                    controller.envision(AnomalyType.FURY);
                 }
                 else {
                     controller.attack(best_attack);
@@ -438,6 +490,7 @@ public class Sage extends RunnableBot {
         }
 
         if (getRobotController().isActionReady()) {
+            getRobotController().setIndicatorDot(getRobotController().getLocation(),255,255,255);
             current_attacking_strategy.attack();
         }
 

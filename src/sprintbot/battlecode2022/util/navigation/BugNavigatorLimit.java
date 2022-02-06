@@ -51,7 +51,7 @@ public class BugNavigatorLimit extends Navigator {
 
         MapLocation current_location = controller.getLocation();
 
-        if (controller.canSenseLocation(target_location) && controller.senseRubble(target_location) >= rubble_limit) {
+        if (controller.canSenseLocation(target_location) && controller.senseRubble(target_location) >= rubble_limit && controller.getLocation().distanceSquaredTo(target_location) <= 13) {
             return MoveResult.IMPOSSIBLE;
         }
 

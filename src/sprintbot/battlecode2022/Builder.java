@@ -132,11 +132,28 @@ public class Builder extends RunnableBot
         @Override
         public boolean move() throws GameActionException {
 
-            if (Cache.age > 100 && !has_built) {
-                int v = controller.readSharedArray(CommandCommunicator.BANK_INDEX);
-                controller.writeSharedArray(CommandCommunicator.BANK_INDEX,v-180);
-                state = BuilderState.FIGHTING;
-                return false;
+            // Build a watchtower instead
+            if (!has_built && Cache.friendly_watchtower && CommandCommunicator.getMyID() > -1 && CommandCommunicator.archonInDanger(CommandCommunicator.getMyID())) {
+                if (controller.getLocation().distanceSquaredTo(Cache.MY_SPAWN_LOCATION) > 2) {
+                    if (navigator.move(Cache.MY_SPAWN_LOCATION) == Navigator.MoveResult.SUCCESS) return true;
+                }
+                navigator.move(Cache.MY_SPAWN_LOCATION);
+                if (controller.getTeamLeadAmount(Cache.OUR_TEAM) > 150 ) {
+                    MapLocation best = null;
+                    int best_score = -9999;
+                    for (MapLocation location : navigator.adjacentLocationWithCenter(controller.getLocation())) {
+                        if (controller.canBuildRobot(RobotType.WATCHTOWER,controller.getLocation().directionTo(location))) {
+                            int score = - controller.senseRubble(location) - location.distanceSquaredTo(Cache.MY_SPAWN_LOCATION);
+                            if (score > best_score) {
+                                best_score = score;
+                                best = location;
+                            }
+                        }
+                    }
+                    if (best != null) {
+                        controller.buildRobot(RobotType.WATCHTOWER,controller.getLocation().directionTo(best));
+                    }
+                }
             }
 
             if (controller.getLocation().distanceSquaredTo(assigned_location) <= 4) {
@@ -144,28 +161,55 @@ public class Builder extends RunnableBot
                 if (Cache.opponent_soldiers.length > Cache.friendly_soldiers.length) {
                     System.out.println("BAD idea");
                     int v = controller.readSharedArray(CommandCommunicator.BANK_INDEX);
-                    controller.writeSharedArray(CommandCommunicator.BANK_INDEX,v-180);
+                    controller.writeSharedArray(CommandCommunicator.BANK_INDEX,Math.max(0,v-180));
                     state = BuilderState.FIGHTING;
                     return false;
                 }
             }
 
             if (!has_reached_assigned) {
-                if (navigator.move(assigned_location) == Navigator.MoveResult.SUCCESS) {
-                    return true;
+
+                // Check if assigned is a terrible option
+                boolean is_assigned_good = false;
+                if (controller.canSenseLocation(assigned_location)) {
+                    for (MapLocation location : navigator.adjacentLocationWithCenter(assigned_location)) {
+                        if (controller.canSenseLocation(location) && controller.senseRubble(location) < controller.senseRubble(controller.getLocation()) + 5) {
+                            is_assigned_good = true;
+                        }
+                    }
                 }
-                return false;
+                else {
+                    is_assigned_good = true;
+                }
+
+                if (!is_assigned_good) {
+                    assigned_location = controller.getLocation();
+                    return false;
+                }
+
+                Navigator.MoveResult move_result = navigator.move(assigned_location);
+                switch (move_result) {
+                    case SUCCESS:
+                        return true;
+                    case IMPOSSIBLE:
+                        assigned_location = controller.getLocation();
+                        return false;
+                    default:
+                        return false;
+                }
             }
 
             //System.out.println(assigned_location);
 
-            int lowest_rubble = 9999;
+            double lowest_rubble = 9999;
 
             if (best_location == null) {
                 for (MapLocation location : controller.getAllLocationsWithinRadiusSquared(controller.getLocation(),8)) {
-                    int penalty = controller.senseRubble(location)
-                            + (controller.isLocationOccupied(location) ? 1 : 0) * 10 +
-                            - Math.min(Navigator.travelDistance(Cache.MY_SPAWN_LOCATION,location),(Cache.MAP_WIDTH+Cache.MAP_HEIGHT)/20);
+                    double penalty = controller.senseRubble(location)
+                            + (controller.isLocationOccupied(location) ? 1 : 0) * 10
+                            - Math.min((Cache.MAP_WIDTH+Cache.MAP_HEIGHT)/20,Navigator.travelDistance(location,Cache.MY_SPAWN_LOCATION))
+                            + Math.max(0,Math.log(navigator.distanceToEdge(location)))
+                            + 0.5 * Navigator.travelDistance(getRobotController().getLocation(),location);
                     if (controller.onTheMap(location) && penalty < lowest_rubble) {
                         lowest_rubble = penalty;
                         best_location = location;
@@ -180,7 +224,6 @@ public class Builder extends RunnableBot
                 return false;
             }
 
-            controller.setIndicatorString(String.valueOf(has_built));
 
             if (controller.getLocation().equals(best_location)) {
                 for (Direction dir : Constants.DIRECTIONS) {
@@ -199,7 +242,7 @@ public class Builder extends RunnableBot
                 if (controller.canBuildRobot(RobotType.LABORATORY,controller.getLocation().directionTo(best_location))) {
                     controller.buildRobot(RobotType.LABORATORY,controller.getLocation().directionTo(best_location));
                     int v = controller.readSharedArray(CommandCommunicator.BANK_INDEX);
-                    controller.writeSharedArray(CommandCommunicator.BANK_INDEX,v-180);
+                    controller.writeSharedArray(CommandCommunicator.BANK_INDEX,Math.max(0,v-180));
                     has_built = true;
                 }
             }
@@ -219,7 +262,7 @@ public class Builder extends RunnableBot
 
     class FightMoveStrategy implements MoveStrategy {
 
-        MapLocation move_target = Cache.MY_SPAWN_LOCATION;
+        MapLocation move_target;
         RobotController controller = getRobotController();
         boolean is_random = true;
 
@@ -269,7 +312,7 @@ public class Builder extends RunnableBot
                         distance = Math.min(distance,robot.getLocation().distanceSquaredTo(controller.getLocation()));
                     }
                 }
-                if (distance > 5) {
+                if (distance > 4 && Cache.opponent_villagers.length + Cache.opponent_soldiers.length + Cache.opponent_buildings.length == 0) {
                     controller.disintegrate();
                     return false;
                 }
@@ -297,24 +340,33 @@ public class Builder extends RunnableBot
 
         @Override
         public boolean move() throws GameActionException {
+            MapLocation[] potential_spots = controller.senseNearbyLocationsWithLead(assigned_location,RobotType.BUILDER.visionRadiusSquared,-1);
+            MapLocation best_location = null;
 
-            if (Cache.age >= 50) {
-                state = BuilderState.FIGHTING;
+            if ((Cache.age > 50 && Cache.opponent_soldiers.length == 0)) {
+                controller.disintegrate();
                 return false;
             }
 
-            MapLocation[] potential_spots = controller.senseNearbyLocationsWithLead(assigned_location,RobotType.BUILDER.visionRadiusSquared,-1);
-            MapLocation best_location = null;
             int best_score = -9999;
             for (int i = potential_spots.length; --i>=0;) {
                 MapLocation location = potential_spots[i];
                 if (controller.senseLead(location) == 0) {
                     boolean is_valid = true;
+                    for (RobotInfo robot : Cache.friendly_buildings) {
+                        /*
+                        if (robot.getType() == RobotType.ARCHON && robot.getLocation().distanceSquaredTo(location) <= 4) {
+                            is_valid = false;
+                            break;
+                        }
+                        */
+                        if (robot.getLocation().equals(location)) {
+                            is_valid = false;
+                            break;
+                        }
+                    }
                     if (is_valid) {
                         int score = - controller.senseRubble(location) / 2 - controller.getLocation().distanceSquaredTo(location);
-                        if (controller.isLocationOccupied(location)) {
-                            score -= 10;
-                        }
                         if (MatrixCommunicator.read(Communicator.Event.FRIENDLY_MINER,location)) {
                             score += 5;
                         }
@@ -378,6 +430,16 @@ public class Builder extends RunnableBot
 
             // Then repair
 
+            for (RobotInfo robot : Cache.friendly_soldiers) {
+
+                if (robot.getType() == RobotType.WATCHTOWER &&
+                        robot.getHealth() < robot.getType().getMaxHealth(robot.getLevel()) && controller.canRepair(robot.getLocation())) {
+                    //controller.setIndicatorLine(controller.getLocation(),robot.getLocation(),0,255,0);
+                    controller.repair(robot.getLocation());
+                    return true;
+                }
+            }
+
             for (RobotInfo robot : Cache.friendly_buildings) {
 
                 if (robot.getHealth() < robot.getType().getMaxHealth(robot.getLevel()) && controller.canRepair(robot.getLocation())) {
@@ -385,7 +447,6 @@ public class Builder extends RunnableBot
                     controller.repair(robot.getLocation());
                     return true;
                 }
-
             }
 
             return false;

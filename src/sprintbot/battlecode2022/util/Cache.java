@@ -12,19 +12,20 @@ public class Cache
 	public static RobotController controller;
 	public static Team OUR_TEAM;
 	public static Team OPPONENT_TEAM;
-	
+
 	public static int MAP_WIDTH;
 	public static int MAP_HEIGHT;
 
 	public static MapLocation MY_SPAWN_LOCATION = null;
 	public static int MY_ACTION_RADIUS;
 	public static int MY_VISION_RADIUS;
-	
+
 	// the end of data is marked with -1
 	public static int[] opponent_archon_compressed_locations = new int[81];
 	public static int[] metal_compressed_locations = new int[81];
 	public static int[] opponent_soldier_compressed_locations = new int[81];
 	public static int[] builder_request_compressed_locations = new int[81];
+	public static int[] opponent_miner_compressed_locations = new int[81];
 
 	public static MapLocation main_force_target;
 
@@ -51,6 +52,7 @@ public class Cache
 	public static MapLocation archon_location = null;
 	public static boolean opponent_watchtower = false;
 	public static boolean friendly_builder = false;
+	public static boolean friendly_watchtower = false;
 
 	public static MapLocation[] lead_spots = null;
 	public static int lead_amount = 0;
@@ -118,6 +120,7 @@ public class Cache
 		archon_location = null;
 		opponent_watchtower = false;
 		friendly_builder = false;
+		friendly_watchtower = false;
 
 		if (controller.getType() == RobotType.SOLDIER || controller.getType() == RobotType.SAGE) {
 			our_total_damage += (double)controller.getType().damage / (double)controller.getType().actionCooldown * 10.0;
@@ -128,9 +131,10 @@ public class Cache
 			RobotInfo unit = units[i];
 			if (unit.getTeam() == OUR_TEAM) {
 				switch (unit.getType()) {
+					case WATCHTOWER:
+						friendly_watchtower = true;
 					case SOLDIER:
 					case SAGE:
-					case WATCHTOWER:
 						our_total_damage += (double)unit.getType().damage / (double)unit.getType().actionCooldown * 10.0;
 						our_total_health += unit.getHealth();
 						if (unit.getHealth() < unit.getType().health) {
@@ -233,6 +237,7 @@ public class Cache
 				}
 			}
 		}
+
 	}
 
 
@@ -299,6 +304,7 @@ public class Cache
 	// Bytecode saving measure
 	private static boolean turn_report_reset = false;
 	private static boolean[] reported = null;
+	private static boolean[] reported_miner = null;
 
 	/**
 	 *
@@ -309,6 +315,7 @@ public class Cache
 
 		if (!turn_report_reset) {
 			reported = new boolean[Communicator.NUM_OF_COMPRESSED_LOCATIONS];
+			reported_miner = new boolean[Communicator.NUM_OF_COMPRESSED_LOCATIONS];
 			turn_report_reset = true;
 		}
 
@@ -318,6 +325,13 @@ public class Cache
 			return;
 		}
 		switch (robot.getType()) {
+			case MINER:
+				if (!reported_miner[compressed_location]) {
+					reported_miner[compressed_location] = true;
+					MatrixCommunicator.update(Communicator.Event.OPPONENT_MINER, robot.getLocation());
+				}
+				break;
+			case LABORATORY:
 			case SOLDIER:
 			case SAGE:
 			case WATCHTOWER:
